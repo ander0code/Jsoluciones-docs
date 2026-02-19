@@ -167,6 +167,19 @@ CREATE TYPE enum_entidad_media AS ENUM (
 -- 33. Tipo de archivo
 CREATE TYPE enum_tipo_archivo AS ENUM ('imagen','documento','firma');
 
+-- 34. Estado de caja POS
+CREATE TYPE enum_estado_caja AS ENUM ('abierta','cerrada');
+
+-- 35. Estado de solicitud de transferencia
+CREATE TYPE enum_estado_transferencia AS ENUM (
+    'pendiente','aprobada','en_transito','completada','rechazada'
+);
+
+-- 36. Estado de resumen diario SUNAT
+CREATE TYPE enum_estado_resumen_diario AS ENUM (
+    'pendiente','enviado','aceptado','rechazado'
+);
+
 
 -- ************************************************************
 -- 1. CONFIGURACIÓN (1 tabla)
@@ -404,9 +417,64 @@ CREATE INDEX idx_mov_producto_fecha ON movimientos_stock(producto_id, created_at
 CREATE INDEX idx_mov_almacen_tipo ON movimientos_stock(almacen_id, tipo_movimiento);
 CREATE INDEX idx_mov_referencia ON movimientos_stock(referencia_tipo, referencia_id);
 
+-- Ubicaciones dentro de almacenes (zona/pasillo/estante/nivel)
+CREATE TABLE ubicaciones_almacen (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    almacen_id      UUID          NOT NULL REFERENCES almacenes(id) ON DELETE CASCADE,
+    codigo          VARCHAR(30)   NOT NULL,
+    zona            VARCHAR(50)   NOT NULL DEFAULT '',
+    pasillo         VARCHAR(20)   NOT NULL DEFAULT '',
+    estante         VARCHAR(20)   NOT NULL DEFAULT '',
+    nivel           VARCHAR(20)   NOT NULL DEFAULT '',
+    descripcion     TEXT          NOT NULL DEFAULT '',
+    is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(almacen_id, codigo)
+);
+
+CREATE INDEX idx_ubic_almacen_zona ON ubicaciones_almacen(almacen_id, zona);
+
+-- Solicitudes de transferencia entre almacenes
+CREATE TABLE transferencias (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    numero              VARCHAR(20)   NOT NULL UNIQUE,
+    almacen_origen_id   UUID          NOT NULL REFERENCES almacenes(id) ON DELETE RESTRICT,
+    almacen_destino_id  UUID          NOT NULL REFERENCES almacenes(id) ON DELETE RESTRICT,
+    estado              enum_estado_transferencia NOT NULL DEFAULT 'pendiente',
+    motivo              TEXT          NOT NULL DEFAULT '',
+    fecha_solicitud     DATE          NOT NULL DEFAULT CURRENT_DATE,
+    fecha_aprobacion    DATE,
+    fecha_completado    DATE,
+    solicitado_por_id   UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE RESTRICT,
+    aprobado_por_id     UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_transf_estado ON transferencias(estado);
+CREATE INDEX idx_transf_origen ON transferencias(almacen_origen_id);
+CREATE INDEX idx_transf_destino ON transferencias(almacen_destino_id);
+
+-- Detalle de solicitud de transferencia
+CREATE TABLE detalle_transferencia (
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    transferencia_id        UUID          NOT NULL REFERENCES transferencias(id) ON DELETE CASCADE,
+    producto_id             UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
+    cantidad_solicitada     DECIMAL(12,2) NOT NULL,
+    cantidad_enviada        DECIMAL(12,2) NOT NULL DEFAULT 0,
+    cantidad_recibida       DECIMAL(12,2) NOT NULL DEFAULT 0,
+    lote_id                 UUID          REFERENCES lotes(id) ON DELETE SET NULL,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_det_transf_transferencia ON detalle_transferencia(transferencia_id);
+CREATE INDEX idx_det_transf_producto ON detalle_transferencia(producto_id);
+
 
 -- ************************************************************
--- 6. VENTAS (6 tablas)
+-- 6. VENTAS (6 tablas + cajas + formas_pago)
 -- ************************************************************
 
 CREATE TABLE cotizaciones (
@@ -519,9 +587,43 @@ CREATE TABLE detalle_ventas (
 
 CREATE INDEX idx_dv_venta_producto ON detalle_ventas(venta_id, producto_id);
 
+-- Cajas POS
+CREATE TABLE cajas (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre              VARCHAR(50)   NOT NULL,
+    sucursal            VARCHAR(100)  NOT NULL DEFAULT '',
+    estado              enum_estado_caja NOT NULL DEFAULT 'abierta',
+    monto_apertura      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    monto_cierre        DECIMAL(12,2),
+    monto_esperado      DECIMAL(12,2),
+    diferencia          DECIMAL(12,2),
+    fecha_apertura      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    fecha_cierre        TIMESTAMPTZ,
+    abierta_por_id      UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE RESTRICT,
+    cerrada_por_id      UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    observaciones       TEXT          NOT NULL DEFAULT '',
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_cajas_estado ON cajas(estado);
+CREATE INDEX idx_cajas_fecha_apertura ON cajas(fecha_apertura);
+
+-- Formas de pago (multi-pago por venta)
+CREATE TABLE formas_pago (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    venta_id            UUID          NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+    metodo_pago         enum_metodo_pago NOT NULL DEFAULT 'efectivo',
+    monto               DECIMAL(12,2) NOT NULL,
+    referencia          VARCHAR(100)  NOT NULL DEFAULT '',
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_formas_pago_venta ON formas_pago(venta_id);
+
 
 -- ************************************************************
--- 7. FACTURACIÓN ELECTRÓNICA (5 tablas)
+-- 7. FACTURACIÓN ELECTRÓNICA (5 tablas + resumen_diario)
 -- ************************************************************
 
 CREATE TABLE series_comprobante (
@@ -632,6 +734,27 @@ CREATE TABLE log_envio_nubefact (
     intentos            INTEGER       NOT NULL DEFAULT 1,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+-- Resumen diario de boletas para SUNAT
+CREATE TABLE resumen_diario (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    fecha_generacion    DATE          NOT NULL,
+    fecha_resumen       DATE          NOT NULL,
+    identificador       VARCHAR(30)   NOT NULL UNIQUE,
+    total_boletas       INTEGER       NOT NULL DEFAULT 0,
+    total_gravada       DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_igv           DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_monto         DECIMAL(14,2) NOT NULL DEFAULT 0,
+    estado              enum_estado_resumen_diario NOT NULL DEFAULT 'pendiente',
+    ticket_sunat        VARCHAR(100)  NOT NULL DEFAULT '',
+    nubefact_request    JSONB,
+    nubefact_response   JSONB,
+    generado_por_id     UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_resumen_fecha_estado ON resumen_diario(fecha_resumen, estado);
 
 
 -- ************************************************************

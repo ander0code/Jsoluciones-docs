@@ -1,7 +1,7 @@
 # JSOLUCIONES ERP — ESTADO ACTUAL
 
-> Ultima actualizacion: 2026-02-19
-> Version: Backend auditado y corregido — endpoints completos para ecommerce/ventas
+> Ultima actualizacion: 2026-02-20
+> Version: Integracion Cloudflare R2 v2 completada — presigned URLs + cache Redis
 
 ---
 
@@ -16,7 +16,7 @@
 | inventario | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** |
 | ventas | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** (incl. Cajas y FormasPago) |
 | facturacion | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** (incl. ResumenDiario) |
-| media | ✅ | ✅ | ✅ | ✅ | ✅ | - | **Completo** |
+| media | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **R2 v2 integrado** |
 | compras | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** |
 | finanzas | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** |
 | distribucion | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **100%** |
@@ -210,6 +210,100 @@ POST         /exportar/                   — Exportar (stub)
 
 ---
 
+## INTEGRACION CLOUDFLARE R2 v2 (2026-02-20)
+
+> Spec completo: `Jsoluciones-docs/contexto/JSOLUCIONES_R2_INTEGRACION_v2.md`
+
+### Arquitectura
+
+- **3 buckets privados**: `j-soluciones-media`, `j-soluciones-documentos`, `j-soluciones-evidencias`
+- **Presigned URLs** temporales para todo acceso a archivos (nunca URLs publicas)
+- **Cache Redis** para presigned URLs (evita llamadas repetidas a R2)
+- **TTL**: URLs duran 1-2h segun bucket, cache Redis expira 5min antes
+
+### Cambios DB (migraciones aplicadas)
+
+| ID | Tabla | Cambio |
+|----|-------|--------|
+| R2-01 | `media_archivos` | `tamano_bytes` Integer → BigInteger |
+| R2-02 | `media_archivos` | Nuevo campo `bucket_name` (identifica bucket) |
+| R2-03 | `media_archivos` | `url_publica` → `url_legacy` (no hay URLs publicas) |
+| R2-06 | `evidencias_entrega` | Nuevo FK `media_id` → `media_archivos` |
+| R2-07 | `comprobantes` + `notas_credito_debito` | `pdf_url/xml_url/cdr_url` → `pdf_r2_key/xml_r2_key/cdr_r2_key` |
+| R2-08 | `media_archivos` | Nuevo campo `r2_metadata` JSONB |
+| R2-09 | `configuracion` | Nuevo FK `logo_media_id` → `media_archivos` |
+| R2-10 | `media_archivos` | Nuevos indices: `idx_media_bucket`, `idx_media_bucket_entidad` |
+
+### Migraciones creadas
+
+| App | Archivo | Contenido |
+|-----|---------|-----------|
+| media | `0002_r2_v2_integracion.py` | R2-01, R2-02, R2-03, R2-08, R2-10 |
+| facturacion | `0003_r2_v2_integracion.py` | R2-07 (RenameField para preservar datos) |
+| facturacion | `0004_alter_comprobante_cdr_r2_key_and_more.py` | Alineacion help_text |
+| distribucion | `0002_r2_v2_integracion.py` | R2-06 |
+| empresa | `0002_r2_v2_integracion.py` | R2-09 |
+
+### Backend — Archivos modificados/creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `config/settings/base.py` | R2 section reescrita: `R2_BUCKETS` dict (3 buckets), TTLs, cache TTLs |
+| `core/choices.py` | +6 `ENTIDAD_MEDIA_CHOICES`, +2 `TIPO_ARCHIVO_CHOICES` (video, audio) |
+| `core/utils/r2_storage.py` | Reescrito como `R2StorageService` clase con: lazy boto3, upload, presigned URLs + Redis cache, delete, validaciones |
+| `core/tasks/r2_tasks.py` | **NUEVO** — 4 tareas Celery: `upload_archivo_r2_async`, `eliminar_archivo_r2`, `limpiar_archivos_huerfanos`, `precalentar_cache_presigned_urls` |
+| `config/celery.py` | +4 task routes R2, +1 beat schedule (`limpiar_archivos_huerfanos` a las 4:30 AM) |
+| `apps/media/models.py` | Campos R2 v2 (bucket_name, url_legacy, r2_metadata, BigInt) |
+| `apps/media/services.py` | Reescrito: `ENTIDAD_BUCKET_MAP`, `get_url_archivo()`, usa `r2_service` singleton |
+| `apps/media/serializers.py` | `url` campo via `SerializerMethodField` (presigned URL desde Redis) |
+| `apps/facturacion/models.py` | `pdf_url→pdf_r2_key`, `xml_url→xml_r2_key`, `cdr_url→cdr_r2_key` |
+| `apps/facturacion/serializers.py` | R2 keys + presigned URL fields calculados (`pdf_url`, `xml_url`, `cdr_url`) |
+| `apps/facturacion/services.py` | 3 funciones actualizadas + `guardar_documentos_sunat()` + `get_pdf_url_comprobante()` |
+| `apps/distribucion/models.py` | FK `media` en `EvidenciaEntrega` |
+| `apps/empresa/models.py` | FK `logo_media` en `Configuracion` |
+
+### Swagger/OpenAPI tags fix
+
+Todos los views ahora tienen `@extend_schema(tags=["..."])` a nivel de clase para que Swagger agrupe correctamente los endpoints bajo sus tags declarados. Tags usan nombres ASCII (sin acentos) para compatibilidad con Orval.
+
+| Vista | Tag | Estado |
+|-------|-----|--------|
+| `inventario/views.py` | Inventario | ✅ |
+| `compras/views.py` | Compras | ✅ |
+| `distribucion/views.py` | Distribucion | ✅ |
+| `finanzas/views.py` | Finanzas | ✅ |
+| `reportes/views.py` | Reportes | ✅ |
+| `ventas/views.py` | Ventas | ✅ |
+| `whatsapp/views.py` | WhatsApp | ✅ |
+| `empresa/views.py` | Empresa | ✅ |
+| `facturacion/views.py` (6 clases) | Facturacion | ✅ |
+| `media/views.py` | Media | ✅ |
+| `usuarios/views/usuarios.py` (PermisoViewSet) | Usuarios | ✅ |
+
+### Frontend — Cambios
+
+| Cambio | Detalle |
+|--------|---------|
+| OpenAPI schema regenerado | `openapi-schema.yaml` refleja todos los campos R2 v2 + tags corregidos |
+| Orval regenerado (limpio) | `src/api/generated/` y `src/api/models/` regenerados desde cero |
+| Modulos Orval consolidados | Tags padre (no subtags) → un modulo por dominio: `inventario/`, `reportes/`, `facturacion/`, `ventas/`, `finanzas/`, etc. |
+| Imports actualizados | Todos los imports frontend apuntan a los nuevos paths de modulos Orval |
+| Tipos generados | `ComprobanteList` tiene `pdf_r2_key` + `pdf_url` (presigned), `MediaArchivo` tiene `url` (presigned), `r2_key`, `bucket_name` |
+| `InvoiceList.tsx` | Sin cambios necesarios — `pdf_url` sigue disponible como campo calculado |
+| Tipos manuales | `src/types/erp/index.ts` actualizado con campos R2 |
+| Dashboard hooks | Corregidos para pasar params obligatorios (fecha_inicio, fecha_fin) |
+| Build | `tsc -b && vite build` pasa sin errores |
+
+### Infraestructura
+
+| Componente | Estado |
+|------------|--------|
+| PostgreSQL | Corriendo (servicio del sistema) |
+| Redis | Corriendo (localhost:6379, usado para cache presigned URLs + Celery) |
+| R2 credentials | Vacias en `.env` (buckets no creados aun en Cloudflare) |
+
+---
+
 ## STUBS PENDIENTES
 
 | Funcionalidad | Archivo | Depende de |
@@ -229,12 +323,20 @@ Ver `PLAN_INTEGRACION.md` para detalles de implementación.
 
 | Componente | Estado |
 |------------|--------|
-| React + Vite + TypeScript | ✅ Configurado |
-| Tailwind CSS + Tailwick Template | ✅ Instalado |
+| React 19 + Vite 7 + TypeScript 5.8 | ✅ Configurado |
+| Tailwind CSS 4 + Tailwick Template | ✅ Instalado |
 | React Router v7 | ✅ Configurado |
+| TanStack React Query v5 | ✅ Configurado |
+| Orval v8 (generacion de tipos/hooks) | ✅ Regenerado con R2 v2 |
 | Auth Context + Protected Routes | ✅ Funcional |
 | Login Page | ✅ Implementado |
-| Vistas del ERP | ⬜ Pendiente |
+| Dashboard (KPIs, top clientes/productos) | ✅ Conectado a API real |
+| Lista de comprobantes (facturacion) | ✅ Conectado a API real + descarga PDF |
+| Lista de ventas/ordenes | ✅ Conectado a API real |
+| Detalle de producto | ✅ Conectado a API real |
+| Tipos Orval R2 v2 | ✅ `pdf_r2_key`, `pdf_url` (presigned), `bucket_name`, `url` (media) |
+| Build produccion (`tsc -b && vite build`) | ✅ 0 errores |
+| Vistas restantes del ERP | ⬜ Pendiente |
 
 ---
 
@@ -243,22 +345,27 @@ Ver `PLAN_INTEGRACION.md` para detalles de implementación.
 | Archivo | Uso |
 |---------|-----|
 | `ESTADO_ACTUAL.md` | Este archivo — Estado actual del proyecto |
-| `PLAN_INTEGRACION.md` | Plan para implementar stubs |
-| `Jsoluciones_Logistica_Backend.md` | Arquitectura backend |
-| `Jsoluciones_devops_service.md` | Configuración DevOps |
-| `10 _mapa_template_tailwick.md` | Mapa de vistas del template |
-| `TEMPLATE_COMPONENTES_A_USAR.md` | Componentes reutilizables |
-| `JSOLUCIONES_TEMPLATE_MAPING.MD` | Mapeo template → ERP |
-| `17_INTEGRACION_CLOUDFARE.MD` | Integración R2 |
-| `SQL_JSOLUCIONES.sql` | Schema de base de datos |
+| `JSOLUCIONES_R2_INTEGRACION_v2.md` | Spec completo de integracion R2 v2 (referencia, ya implementado) |
+| `PLAN_INTEGRACION.md` | Plan para implementar stubs pendientes |
+| `Jsoluciones_Logistica_Backend.md` | Spec de logica de negocio de los 9 modulos backend |
+| `Jsoluciones_devops_service.md` | Infraestructura: Redis, Celery, Channels, ASGI |
+| `Jsoluciones_roles_flujos.MD` | 10 roles + todos los flujos UX por rol |
+| `10 _mapa_template_tailwick.md` | Mapeo de rutas del template Tailwick (22 usadas / 21 diferidas / 41 ignoradas) |
+| `TEMPLATE_COMPONENTES_A_USAR.md` | Componentes validados contra SQL/backend real |
+
+### Archivos movidos a `historial/`
+
+| Archivo | Razon |
+|---------|-------|
+| `17_INTEGRACION_CLOUDFARE.MD` | Supersedido por R2 v2 (usaba 1 bucket con URLs publicas) |
+| `JSOLUCIONES_TEMPLATE_MAPING.MD` | Reemplazado por `TEMPLATE_COMPONENTES_A_USAR.md` (referenciaba entidades inexistentes) |
 
 ---
 
 ## PROXIMOS PASOS
 
-1. **Frontend** — Crear vistas React conectadas a endpoints (POS, inventario, clientes, facturacion)
-2. **Celery** — Agregar beat schedule para modulos nuevos
+1. **Cloudflare R2** — Crear los 3 buckets en el dashboard de Cloudflare, llenar credenciales en `.env`
+2. **Frontend** — Crear vistas React restantes conectadas a endpoints (POS, inventario, clientes, detalle facturacion)
 3. **Integraciones** — Implementar stubs segun PLAN_INTEGRACION.md
 4. **Flujos faltantes** — ~30% flujos core y ~60% flujos secundarios (ver Jsoluciones_roles_flujos.MD)
 5. **Sucursales** — Actualmente es un campo string; evaluar si necesita tabla dedicada
-6. **Migraciones** — Ejecutar `makemigrations` y `migrate` para las tablas `cajas`, `formas_pago`, `resumen_diario`

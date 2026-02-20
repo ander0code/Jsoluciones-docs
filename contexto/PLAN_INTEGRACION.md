@@ -1,7 +1,7 @@
 # PLAN DE INTEGRACIÓN — JSoluciones ERP
 
-> Fecha: 2026-02-19
-> Estado: Documentación de integraciones pendientes
+> Fecha: 2026-02-20
+> Estado: Documentación de integraciones pendientes (R2 v2 completado)
 
 ---
 
@@ -242,7 +242,7 @@ def generar_estado_resultados(self):
 | inventario | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo |
 | ventas | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo |
 | facturacion | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo |
-| media | - | - | - | - | ✅ | - | Básico |
+| media | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **R2 v2 integrado** |
 | compras | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo |
 | finanzas | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo (con stubs) |
 | distribucion | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Completo (con stubs) |
@@ -253,8 +253,8 @@ def generar_estado_resultados(self):
 
 ## 4. PRÓXIMOS PASOS INMEDIATOS
 
-1. **Celery beat schedule** — Agregar tareas de los 5 módulos nuevos
-2. **Celery task routes** — Configurar colas para los 5 módulos nuevos
-3. **Implementar intereses de mora** — Fase 1
-4. **Implementar estado de resultados** — Fase 1
-5. **Implementar exportación Excel/PDF** — Fase 1
+1. **Cloudflare R2** — Crear 3 buckets en Cloudflare, llenar credenciales en `.env`
+2. **Implementar intereses de mora** — Fase 1
+3. **Implementar estado de resultados** — Fase 1
+4. **Implementar exportación Excel/PDF** — Fase 1
+5. **Frontend** — Vistas restantes del ERP

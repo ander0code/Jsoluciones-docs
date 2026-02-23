@@ -652,9 +652,9 @@ CREATE TABLE comprobantes (
     total_igv           DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_venta         DECIMAL(12,2) NOT NULL DEFAULT 0,
     estado_sunat        enum_estado_comprobante NOT NULL DEFAULT 'pendiente',
-    pdf_url             VARCHAR(500)  NOT NULL DEFAULT '',
-    xml_url             VARCHAR(500)  NOT NULL DEFAULT '',
-    cdr_url             VARCHAR(500)  NOT NULL DEFAULT '',
+    pdf_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del PDF (no URL directa — via presigned URL)
+    xml_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del XML UBL
+    cdr_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del CDR SUNAT
     hash_sunat          TEXT          NOT NULL DEFAULT '',
     qr_sunat            TEXT          NOT NULL DEFAULT '',
     nubefact_request    JSONB,
@@ -705,9 +705,9 @@ CREATE TABLE notas_credito_debito (
     total_igv             DECIMAL(12,2) NOT NULL DEFAULT 0,
     total                 DECIMAL(12,2) NOT NULL DEFAULT 0,
     estado_sunat          enum_estado_comprobante NOT NULL DEFAULT 'pendiente',
-    pdf_url               VARCHAR(500)  NOT NULL DEFAULT '',
-    xml_url               VARCHAR(500)  NOT NULL DEFAULT '',
-    cdr_url               VARCHAR(500)  NOT NULL DEFAULT '',
+    pdf_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del PDF
+    xml_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del XML
+    cdr_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del CDR
     nubefact_request      JSONB,
     nubefact_response     JSONB,
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
@@ -1354,3 +1354,407 @@ CREATE INDEX idx_wa_log_mensaje ON whatsapp_log(mensaje_id);
 
 -- media_archivos: FK auditoría (entidad indices ya existen)
 CREATE INDEX idx_media_subido_por ON media_archivos(subido_por_id);
+
+
+-- ============================================================
+-- ACTUALIZACIONES POST-v3
+-- Sincronizado con migrations Django — generado 2026-02-23
+-- ============================================================
+
+
+-- ************************************************************
+-- [UPD-1] EVALUACIONES DE PROVEEDOR (nueva tabla)
+-- Fuente: compras/0004_add_evaluacion_proveedor (2026-02-22)
+-- ************************************************************
+
+CREATE TABLE evaluaciones_proveedor (
+    id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    proveedor_id          UUID          NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+    periodo_inicio        DATE          NOT NULL,
+    periodo_fin           DATE          NOT NULL,
+    pct_entrega_a_tiempo  DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    pct_cantidad_completa DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    pct_calidad           DECIMAL(5,2)  NOT NULL DEFAULT 100,
+    total_ordenes         INTEGER       NOT NULL DEFAULT 0,
+    total_recibidas       INTEGER       NOT NULL DEFAULT 0,
+    puntaje_global        DECIMAL(5,2)  NOT NULL DEFAULT 0,   -- 40% entrega + 30% cantidad + 30% calidad
+    notas                 TEXT          NOT NULL DEFAULT '',
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_evaluacion_proveedor_periodo UNIQUE(proveedor_id, periodo_inicio, periodo_fin)
+);
+
+CREATE INDEX idx_eval_proveedor ON evaluaciones_proveedor(proveedor_id);
+CREATE INDEX idx_eval_periodo ON evaluaciones_proveedor(periodo_fin DESC);
+
+
+-- ************************************************************
+-- [UPD-2] GASTOS LOGÍSTICOS EN ÓRDENES DE COMPRA
+-- Fuente: compras/0005_add_gastos_logisticos_oc (2026-02-22)
+-- ************************************************************
+
+ALTER TABLE ordenes_compra
+    ADD COLUMN gastos_logisticos DECIMAL(12,2) NOT NULL DEFAULT 0;
+-- Ayuda: flete, seguro, etc. prorrateado entre items de la OC.
+
+
+-- ************************************************************
+-- [UPD-3] is_active EN PEDIDOS
+-- Fuente: distribucion/0003_add_is_active_pedidos
+-- ************************************************************
+
+ALTER TABLE pedidos
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+
+-- ************************************************************
+-- [UPD-4] CÓDIGO DE SEGUIMIENTO EN PEDIDOS
+-- Fuente: distribucion/0004_add_codigo_seguimiento_to_pedido (2026-02-21)
+-- ************************************************************
+
+ALTER TABLE pedidos
+    ADD COLUMN codigo_seguimiento VARCHAR(8) NOT NULL DEFAULT '';
+
+CREATE UNIQUE INDEX idx_ped_codigo_seg ON pedidos(codigo_seguimiento);
+-- Nota: el backend genera un código aleatorio de 8 chars al crear el pedido.
+-- Se expone como tracking público sin autenticación.
+
+
+-- ************************************************************
+-- [UPD-5] LOGO MEDIA FK EN CONFIGURACIÓN
+-- Fuente: empresa/0002_r2_v2_integracion (2026-02-20)
+-- ************************************************************
+
+ALTER TABLE configuracion
+    ADD COLUMN logo_media_id UUID REFERENCES media_archivos(id) ON DELETE SET NULL;
+-- Nota: columna `logo` (VARCHAR) queda como legacy. Usar logo_media_id en adelante.
+
+
+-- ************************************************************
+-- [UPD-6] MODO CONTINGENCIA EN CONFIGURACIÓN
+-- Fuente: empresa/0003_add_modo_contingencia (2026-02-21)
+-- ************************************************************
+
+ALTER TABLE configuracion
+    ADD COLUMN modo_contingencia       BOOLEAN     NOT NULL DEFAULT FALSE,
+    ADD COLUMN contingencia_activada_at TIMESTAMPTZ;
+-- Si modo_contingencia=TRUE, los comprobantes se generan sin enviar a Nubefact.
+
+
+-- ************************************************************
+-- [UPD-7] VALOR 'error_permanente' EN ENUM ESTADO COMPROBANTE
+-- Fuente: facturacion/0005 + 0006 (2026-02-21)
+-- Nota: en DB Django (VARCHAR), el choice ya existe en el modelo.
+--       En DB con ENUMs nativos PostgreSQL (este SQL) se debe agregar así:
+-- ************************************************************
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_estado_comprobante') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_enum e
+            JOIN pg_type t ON e.enumtypid = t.oid
+            WHERE t.typname = 'enum_estado_comprobante'
+              AND e.enumlabel = 'error_permanente'
+        ) THEN
+            ALTER TYPE enum_estado_comprobante ADD VALUE 'error_permanente';
+        END IF;
+    END IF;
+END $$;
+
+
+-- ************************************************************
+-- [UPD-8] TABLA WHATSAPP_CONFIGURACION RECONSTRUIDA
+-- Fuente: whatsapp/0002_rebuild_configuracion
+-- Esquema anterior usaba (token_acceso, business_id, numero_verificado, is_active).
+-- Esquema nuevo usa (phone_number_id, waba_id, access_token, webhook_verify_token, activo).
+-- ************************************************************
+
+DROP TABLE IF EXISTS whatsapp_configuracion;
+CREATE TABLE whatsapp_configuracion (
+    id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone_number_id       VARCHAR(50)   NOT NULL DEFAULT '',
+    waba_id               VARCHAR(50)   NOT NULL DEFAULT '',
+    access_token          TEXT          NOT NULL DEFAULT '',
+    webhook_verify_token  VARCHAR(100)  NOT NULL DEFAULT '',
+    activo                BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+
+-- ************************************************************
+-- [UPD-9] COMISIONES DE VENDEDOR (nueva tabla)
+-- Fuente: ventas/0003_add_comision_vendedor (2026-02-22)
+-- ************************************************************
+
+CREATE TABLE comisiones_vendedor (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendedor_id     UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE RESTRICT,
+    periodo         VARCHAR(7)    NOT NULL,           -- Formato YYYY-MM, ej: 2026-02
+    porcentaje      DECIMAL(5,2)  NOT NULL DEFAULT 5, -- % sobre total_venta
+    total_ventas    DECIMAL(14,2) NOT NULL DEFAULT 0, -- Suma total_venta del periodo
+    monto_comision  DECIMAL(14,2) NOT NULL DEFAULT 0, -- total_ventas * porcentaje / 100
+    cantidad_ventas INTEGER       NOT NULL DEFAULT 0,
+    pagado          BOOLEAN       NOT NULL DEFAULT FALSE,
+    fecha_pago      DATE,
+    notas           TEXT          NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(vendedor_id, periodo)
+);
+
+CREATE INDEX idx_comisiones_vendedor ON comisiones_vendedor(vendedor_id);
+CREATE INDEX idx_comisiones_periodo ON comisiones_vendedor(periodo);
+
+
+-- ************************************************************
+-- [UPD-10] VENTAS: cliente_id nullable
+-- Fuente: ventas/0004_venta_cliente_nullable (2026-02-22)
+-- Permite ventas rápidas POS sin cliente registrado.
+-- ************************************************************
+
+ALTER TABLE ventas
+    ALTER COLUMN cliente_id DROP NOT NULL;
+
+
+-- ************************************************************
+-- [UPD-11] REPORTES: snapshots KPI y programaciones de reporte
+-- Fuente: reportes/0001_add_snapshot_kpi_programacion_reporte (2026-02-22)
+-- ************************************************************
+
+CREATE TABLE snapshots_kpi (
+    id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    fecha       DATE          NOT NULL,
+    hora        TIME          NOT NULL,
+    datos       JSONB         NOT NULL,  -- KPIs serializados como JSON
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_snap_fecha_hora ON snapshots_kpi(fecha DESC, hora DESC);
+
+CREATE TABLE programaciones_reporte (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre          VARCHAR(200)  NOT NULL,
+    tipo_reporte    VARCHAR(30)   NOT NULL,  -- 'ventas','inventario','cxc','cxp'
+    formato         VARCHAR(10)   NOT NULL DEFAULT 'excel',  -- 'excel','pdf'
+    frecuencia      VARCHAR(20)   NOT NULL,  -- 'diario','semanal','mensual'
+    hora_envio      TIME          NOT NULL,
+    dia_semana      INTEGER,                 -- 0=Lunes..6=Domingo (solo semanal)
+    dia_mes         INTEGER,                 -- 1-28 (solo mensual)
+    emails          JSONB         NOT NULL DEFAULT '[]',
+    activo          BOOLEAN       NOT NULL DEFAULT TRUE,
+    ultima_ejecucion TIMESTAMPTZ,
+    creado_por_id   UUID          REFERENCES usuarios(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+
+-- ============================================================
+-- ACTUALIZACIONES POST-v3 CONTINUACIÓN
+-- Sincronizado con migrations Django — generado 2026-02-23 (T11)
+-- ============================================================
+
+
+-- ************************************************************
+-- [UPD-12] SESIONES ACTIVAS JWT (nueva tabla)
+-- Fuente: usuarios app — modelo SesionActiva
+-- Registra tokens JWT activos con JTI para invalidación individual.
+-- ************************************************************
+
+CREATE TABLE sesiones_activas (
+    id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id  UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE CASCADE,
+    jti         VARCHAR(64)   NOT NULL UNIQUE,
+    ip_address  VARCHAR(45)   NOT NULL DEFAULT '',
+    user_agent  VARCHAR(300)  NOT NULL DEFAULT '',
+    activo      BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ   NOT NULL
+);
+
+CREATE INDEX idx_sesion_usuario_activo ON sesiones_activas(usuario_id, activo);
+
+
+-- ************************************************************
+-- [UPD-13] NOTIFICACIONES INTERNAS (nueva tabla)
+-- Fuente: usuarios app — modelo Notificacion
+-- Alimenta la campana del header via WebSocket ws/notificaciones/.
+-- Tipos: stock_bajo | lote_vencer | cxc_vencida | cxp_vencer |
+--        cotizacion_vencer | oc_aprobada | pedido_entregado | sistema
+-- ************************************************************
+
+CREATE TABLE notificaciones (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id      UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE CASCADE,
+    tipo            VARCHAR(30)   NOT NULL DEFAULT 'sistema',
+    titulo          VARCHAR(200)  NOT NULL,
+    mensaje         TEXT          NOT NULL,
+    leida           BOOLEAN       NOT NULL DEFAULT FALSE,
+    referencia_tipo VARCHAR(50)   NOT NULL DEFAULT '',
+    referencia_id   UUID,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notif_usuario_leida  ON notificaciones(usuario_id, leida);
+CREATE INDEX idx_notif_usuario_fecha  ON notificaciones(usuario_id, created_at);
+
+
+-- ************************************************************
+-- [UPD-14] PERIODOS CONTABLES (nueva tabla)
+-- Fuente: finanzas app — modelo PeriodoContable
+-- Controla apertura/cierre mensual; bloquea operaciones en periodos cerrados.
+-- ************************************************************
+
+CREATE TABLE periodos_contables (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    anio            INTEGER       NOT NULL,
+    mes             INTEGER       NOT NULL,   -- 1-12
+    cerrado         BOOLEAN       NOT NULL DEFAULT FALSE,
+    cerrado_por_id  UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    cerrado_at      TIMESTAMPTZ,
+    notas           TEXT          NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_periodo_anio_mes UNIQUE(anio, mes)
+);
+
+
+-- ************************************************************
+-- [UPD-15] CONCILIACIONES BANCARIAS (nueva tabla)
+-- Fuente: finanzas app — modelo ConciliacionBancaria
+-- Encabezado de sesión de conciliación mensual por cuenta bancaria.
+-- Estados: pendiente | conciliado | diferencia
+-- ************************************************************
+
+CREATE TABLE conciliaciones_bancarias (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre_cuenta       VARCHAR(150)  NOT NULL,
+    periodo             VARCHAR(7)    NOT NULL,   -- Formato YYYY-MM
+    saldo_segun_banco   DECIMAL(14,2) NOT NULL,
+    saldo_segun_sistema DECIMAL(14,2) NOT NULL DEFAULT 0,
+    diferencia          DECIMAL(14,2) NOT NULL DEFAULT 0,
+    estado              VARCHAR(20)   NOT NULL DEFAULT 'pendiente',
+    notas               TEXT          NOT NULL DEFAULT '',
+    creado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conc_periodo_estado ON conciliaciones_bancarias(periodo, estado);
+
+
+-- ************************************************************
+-- [UPD-16] MOVIMIENTOS BANCARIOS (nueva tabla)
+-- Fuente: finanzas app — modelo MovimientoBancario
+-- Líneas del extracto bancario. Se concilian contra cobros/pagos del sistema.
+-- tipo: ingreso | egreso
+-- cobro_id / pago_id: FK a cobros/pagos del sistema (SET NULL si se elimina)
+-- ************************************************************
+
+CREATE TABLE movimientos_bancarios (
+    id               UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    conciliacion_id  UUID          NOT NULL REFERENCES conciliaciones_bancarias(id) ON DELETE CASCADE,
+    fecha            DATE          NOT NULL,
+    descripcion      VARCHAR(300)  NOT NULL,
+    tipo             VARCHAR(10)   NOT NULL DEFAULT 'ingreso',   -- ingreso | egreso
+    monto            DECIMAL(12,2) NOT NULL,
+    referencia       VARCHAR(100)  NOT NULL DEFAULT '',
+    cobro_id         UUID          REFERENCES cobros(id) ON DELETE SET NULL,
+    pago_id          UUID          REFERENCES pagos(id)  ON DELETE SET NULL,
+    conciliado       BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_mov_banc_conciliacion ON movimientos_bancarios(conciliacion_id);
+CREATE INDEX idx_mov_banc_conciliado   ON movimientos_bancarios(conciliado);
+CREATE INDEX idx_mov_banc_cobro        ON movimientos_bancarios(cobro_id);
+CREATE INDEX idx_mov_banc_pago         ON movimientos_bancarios(pago_id);
+
+
+-- ************************************************************
+-- [UPD-17] TRAZABILIDAD POR NÚMERO DE SERIE (nueva tabla)
+-- Fuente: inventario app — modelo Serie (migrations 0004 + 0005)
+-- Solo aplica a productos con requiere_serie = TRUE.
+-- Estados: disponible | vendido | devuelto | dado_de_baja
+-- ************************************************************
+
+CREATE TABLE series (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    producto_id     UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
+    numero_serie    VARCHAR(100)  NOT NULL,
+    estado          VARCHAR(20)   NOT NULL DEFAULT 'disponible',
+    almacen_id      UUID          REFERENCES almacenes(id) ON DELETE SET NULL,
+    referencia_tipo VARCHAR(30)   NOT NULL DEFAULT '',
+    referencia_id   UUID,
+    observaciones   TEXT          NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_serie_producto_numero UNIQUE(producto_id, numero_serie)
+);
+
+CREATE INDEX idx_series_numero          ON series(numero_serie);
+CREATE INDEX idx_series_producto_estado ON series(producto_id, estado);
+CREATE INDEX idx_series_almacen         ON series(almacen_id);
+
+
+-- ************************************************************
+-- [UPD-18] COLUMNA requiere_serie EN productos
+-- Fuente: inventario app — campo agregado en T6
+-- ************************************************************
+
+ALTER TABLE productos
+    ADD COLUMN IF NOT EXISTS requiere_serie BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+-- ************************************************************
+-- [UPD-19] WHATSAPP_CONFIGURACION: campo singleton_lock
+-- Fuente: whatsapp/0003_add_singleton_constraint (T11)
+-- Garantiza que solo exista una fila en la tabla (singleton).
+-- ************************************************************
+
+ALTER TABLE whatsapp_configuracion
+    ADD COLUMN IF NOT EXISTS singleton_lock INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE whatsapp_configuracion
+    ADD CONSTRAINT uq_whatsapp_config_singleton UNIQUE(singleton_lock);
+
+
+-- ************************************************************
+-- [UPD-20] WHATSAPP: estructura real de whatsapp_mensajes y whatsapp_log
+-- Fuente: whatsapp app — modelos WhatsappMensaje y WhatsappLog
+-- El esquema original del SQL v3 difería del modelo Django real.
+-- Se documenta la estructura correcta aquí como referencia.
+--
+-- whatsapp_mensajes columnas reales vs SQL v3:
+--   SQL v3 tenía: destinatario_telefono, cliente_id, contenido_enviado,
+--                 meta_message_id, codigo_respuesta_api
+--   Django real:  destinatario (VARCHAR 20), nombre_destinatario (VARCHAR 200),
+--                 contenido (TEXT), parametros (JSONB), wa_message_id (VARCHAR 100),
+--                 error_detalle (TEXT), enviado_at (TIMESTAMPTZ nullable)
+--                 — sin FK directa a clientes
+--
+-- whatsapp_log columnas reales vs SQL v3:
+--   SQL v3 tenía: mensaje_id FK, request_json, response_json, codigo_http
+--   Django real:  evento (VARCHAR 50), payload (JSONB), wa_message_id (VARCHAR 100),
+--                 procesado (BOOLEAN) — sin FK a mensajes
+--
+-- whatsapp_plantillas: falta columna idioma VARCHAR(10) en SQL v3
+-- ************************************************************
+
+-- Corrección columnas whatsapp_mensajes
+ALTER TABLE whatsapp_mensajes
+    ADD COLUMN IF NOT EXISTS nombre_destinatario VARCHAR(200) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS parametros          JSONB        NOT NULL DEFAULT '{}',
+    ADD COLUMN IF NOT EXISTS wa_message_id       VARCHAR(100) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS error_detalle       TEXT         NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS enviado_at          TIMESTAMPTZ;
+
+-- Nota: columnas antiguas (meta_message_id, codigo_respuesta_api, cliente_id)
+-- siguen en SQL v3 por compatibilidad. El modelo Django NO las usa.
+
+-- Corrección columnas whatsapp_plantillas
+ALTER TABLE whatsapp_plantillas
+    ADD COLUMN IF NOT EXISTS idioma VARCHAR(10) NOT NULL DEFAULT 'es';

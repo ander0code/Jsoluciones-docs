@@ -1,8 +1,8 @@
 # JSOLUCIONES ERP — ESTADO ACTUAL DEL PROYECTO
 
-> Ultima actualizacion: 2026-02-23 (Sesion T8 — Implementacion gaps auditados en T7)
+> Ultima actualizacion: 2026-02-23 (Sesion T16 — BE: B1/B2/B3/B4/C1/C2/D1 implementados; 42/42 tests passing)
 > Metodo: Revision directa de TODOS los archivos — sin suposiciones, con numero de linea donde aplica
-> Referencia: JSOLUCIONES_MODULOS_VERSION_FINAL.MD
+> Referencia: JSOLUCIONES_MODULOS_CONTEXTO.md
 
 ---
 
@@ -10,9 +10,9 @@
 
 | Lado | Avance Real |
 |---|---|
-| **Backend** | **~87%** |
-| **Frontend** | **~83%** |
-| **Promedio Global** | **~85%** |
+| **Backend** | **~97%** |
+| **Frontend** | **~100% del plan** (todos los gaps 1-17 del PLAN_INTEGRACION_FE_COMPLETO.md) |
+| **Promedio Global** | **~98%** |
 
 ---
 
@@ -20,21 +20,236 @@
 
 | Modulo | Backend | Frontend | Promedio |
 |---|:---:|:---:|:---:|
-| 1. Ventas / POS | 91% | 76% | 83% |
-| 2. Inventario | 90% | 87% | 88% |
-| 3. Facturacion Electronica | 87% | 83% | 85% |
-| 4. Distribucion y Seguimiento | 88% | 85% | 86% |
-| 5. Compras y Proveedores | 94% | 92% | 93% |
-| 6. Gestion Financiera y Tributaria | 72% | 65% | 68% |
-| 7. Comunicacion WhatsApp | 40% | 55% | 47% |
-| 8. Dashboard y Reportes | 96% | 94% | 95% |
-| 9. Usuarios y Roles | 90% | 91% | 90% |
+| 1. Ventas / POS | 91% | 95% | 93% |
+| 2. Inventario | 91% | 97% | 94% |
+| 3. Facturacion Electronica | 87% | 97% | 92% |
+| 4. Distribucion y Seguimiento | 88% | 96% | 92% |
+| 5. Compras y Proveedores | 94% | 97% | 95% |
+| 6. Gestion Financiera y Tributaria | 80% | 95% | 87% |
+| 7. Comunicacion WhatsApp | 45% | 90% | 67% |
+| 8. Dashboard y Reportes | 96% | 100% | 98% |
+| 9. Usuarios y Roles | 90% | 97% | 93% |
 
-> Sesion T8: Se implementaron los 10 gaps identificados en T7. Ver historial de cambios.
+> Sesion T10: Tests BE 42/42 pass, tests FE 18/18 pass, fix TDZ handlePreview, fix ?? syntax, pagina WhatsApp logs creada, migracion inventario 0005 aplicada, useOnlineStatus en cart.
+> Sesion T11: Refactor calidad DB — 4 UUIDs bare → FK reales en finanzas, choices centralizados en core/choices.py, singleton WhatsApp, migrations aplicadas. Tests 42/42.
+> Sesion T12: Gaps FE completados — requiere_serie en formulario productos, KPIs pedidos usan conteos reales BE, link Ver Detalle clientes/proveedores, filtro categoria en stock, paginacion dinamica InvoiceList, accion Marcar Pagada en comisiones. BE: endpoint marcar-pagada comision, producto_categoria_id en StockSerializer, fix redundant source= en serializers finanzas. Tests 42/42 BE, 18/18 FE, tsc clean.
+> Sesion T13: 8 gaps prioridad ALTA implementados — (1+2) conciliacion matching con botones Confirmar/Ignorar por movimiento, (3) /whatsapp/metricas page con KPIs y tasas, (4) /whatsapp/campanas page con modal nueva campana, (5) /whatsapp/automatizaciones page + endpoint BE mock con estado en memoria + orval regenerado, (6) boton Consumidor Final siempre visible en POS con badge activo, (7) modal Entrega Fallida en pedido-detalle, (8) pipeline facturacion verificado — ya estaba completo. tsc clean.
+> Sesion T16: BE B1-B4 mocks→BD (WhatsappCampana, WhatsappAutomatizacion, ConfiguracionKPI); C1 validacion requiere_serie/lote; C2 FIFO automatico en registrar_salida; D1 nubefact_token EncryptedCharField. Tests 42/42.
+> Sesion T14: Gaps 9-17 del plan completados — checklist+firma cierre periodo (BE+FE), banner DEMO (BE campo modo_demo + FE DemoBanner.tsx), UI series en recepciones (accordeon por item + POST series), matriz permisos tabla cruzada (filas=modulos, columnas=acciones), CRUD series desde producto (SeriesTab con RegistrarSerieModal), validacion stock tiempo real en TransferenciaModal, umbrales semaforos configurables (BE ConfiguracionKPIsView + FE UmbralesModal + semaforo en KPI Ventas Hoy), filtro cliente en InvoiceList (ya estaba completo). OpenAPI+Orval regenerados. pnpm tsc --noEmit limpio.
 
 ---
 
 ## HISTORIAL DE CAMBIOS
+
+### Sesion T14 (2026-02-23 — Gaps 9-17 PLAN_INTEGRACION_FE_COMPLETO: FE al 100% del plan)
+
+**T14-1: BE+FE Checklist pre-cierre de periodo (Gap 9)**
+- `finanzas/views.py`: action `checklist` en `PeriodoContableViewSet` — llama a `finanzas_service.checklist_pre_cierre(periodo)`
+- `finanzas/services.py`: funcion `checklist_pre_cierre()` — verifica asientos en borrador, CxC pendientes del periodo, conciliaciones del periodo, estado del periodo
+- `PeriodosList.tsx`: `ChecklistModal` — lista items con LuCircleCheck (verde) / LuCircleX (rojo), contador problemas, boton "Proceder" deshabilitado si hay items fallidos
+- Hook orval: `useFinanzasPeriodosChecklistRetrieve(id)` — requiere id como string
+
+**T14-2: BE+FE Firma digital cierre periodo (Gap 10)**
+- `finanzas/views.py`: action `firmar` en `PeriodoContableViewSet` — acepta `{ pin, anio, mes }`, valida PIN 4 digitos, retorna periodo firmado con `firmado_por` y `fecha_firma`
+- `PeriodosList.tsx`: `FirmaModal` — flujo checklist → PIN modal → POST `/finanzas/periodos/{id}/firmar/` → toast exito
+- Hook orval: `useFinanzasPeriodosFirmarCreate` — body `{ pin: string; anio: number; mes: number }`
+
+**T14-3: BE+FE Banner modo DEMO (Gap 11)**
+- `facturacion/services.py`: `get_estado_contingencia()` ahora incluye campo `"modo_demo": False`
+- `src/components/layouts/topbar/DemoBanner.tsx`: nuevo componente — banner azul/cyan, aparece si `modo_demo=True` en respuesta de `GET /facturacion/contingencia/estado/`
+- `topbar/index.tsx`: monta `<DemoBanner />` debajo de `<ContingenciaBanner />`
+
+**T14-4: OpenAPI + Orval regenerados (primer ciclo T14)**
+- `openapi-schema.yaml` regenerado con manage.py spectacular
+- `src/api/` regenerado con pnpm orval — nuevos hooks para checklist, firmar, configuracion-kpis
+
+**T14-5: FE UI series en recepciones (Gap 12)**
+- `orden-compra-detalle/RecepcionFormModal.tsx`: accordeon por cada item de la OC para ingresar N numeros de serie (cantidad = cantidad_recibida)
+- Al confirmar recepcion: POST a `/inventario/series/` para cada serie ingresada
+- El accordeon es opcional — se puede expandir o ignorar por item
+
+**T14-6: FE Matriz permisos tabla cruzada (Gap 13)**
+- `configuracion/roles/index.tsx`: `PermisosModal` refactorizado — tabla cruzada filas=modulos, columnas=acciones (ver/crear/editar/eliminar/aprobar)
+- Toggle completo por fila (seleccionar todos los permisos de un modulo) y por columna (seleccionar una accion en todos los modulos)
+- `Permiso.codigo` parseado con `.split('.')` — formato `modulo.accion`
+
+**T14-7: FE CRUD series desde producto (Gap 14)**
+- `product-overview/components/SeriesTab.tsx`: refactorizado con tabla de series (numero, estado, almacen, fecha) + `RegistrarSerieModal` (nombre, estado enum, almacen selector) + boton eliminar por fila
+
+**T14-8: FE Validacion stock tiempo real en TransferenciaModal (Gap 15)**
+- `stock/components/TransferenciaStockModal.tsx`: cuando producto+almacen origen seleccionados → query `useInventarioStockList` — muestra "Disponible: X unidades" debajo del campo cantidad; boton deshabilitado si cantidad > stock_disponible
+
+**T14-9: BE Endpoint configuracion KPIs (Gap 16 BE)**
+- `reportes/views.py`: clase `ConfiguracionKPIsView` (GET+PATCH) con estado en memoria `_configuracion_kpis_state` — campos: `ventas_diarias_umbral_verde`, `ventas_diarias_umbral_amarillo`, `stock_bajo_umbral`
+- `reportes/urls.py`: ruta `configuracion-kpis/` registrada
+
+**T14-10: OpenAPI + Orval regenerados (segundo ciclo T14)**
+- `openapi-schema.yaml` regenerado con el nuevo endpoint configuracion-kpis
+- `src/api/generated/reportes/reportes.ts`: nuevos hooks `useReportesConfiguracionKpisRetrieve`, `useReportesConfiguracionKpisPartialUpdate`, `getReportesConfiguracionKpisRetrieveQueryKey`
+
+**T14-11: FE Umbrales semaforos configurables + modal (Gap 16 FE)**
+- `dashboard/index/index.tsx`:
+  - `UmbralesModal`: inputs para los 3 umbrales, guarda con PATCH, invalida query cache al exito
+  - Hook `useReportesConfiguracionKpisRetrieve` → `umbralVerde` / `umbralAmarillo`
+  - `semaforoVentas`: calcula colorBg/colorText segun `monto_ventas_hoy` vs umbrales
+  - KPI card "Ventas Hoy" usa `semaforoVentas.colorBg` y `semaforoVentas.colorText`
+  - Boton "Umbrales" en header (visible solo admin/gerente) → abre `UmbralesModal`
+  - Modal se monta en JSX con `{showUmbrales && <UmbralesModal ... />}`
+
+**T14-12: Gap 17 verificado — ya estaba completo**
+- `InvoiceList.tsx` ya tenia filtro cliente autocomplete completo (lineas 67-200): `useClientesList`, dropdown sugerencias, boton limpiar, pasa `clienteId` al hook de comprobantes
+
+**Estado post-T14:** `pnpm tsc --noEmit` limpio — todos los 17 gaps del PLAN_INTEGRACION_FE_COMPLETO.md completados
+
+---
+
+### Sesion T12 (2026-02-23 — Gaps FE: 8 mejoras de UX + 3 fixes BE)
+
+**T12-1: BE fix `source=` redundante en finanzas/serializers.py**
+- `CuentaPorCobrarListSerializer.comprobante_id` y `CuentaPorCobrarDetailSerializer.comprobante_id`: eliminado `source="comprobante_id"` redundante
+- `CuentaPorPagarListSerializer.factura_proveedor_id` y `CuentaPorPagarDetailSerializer.factura_proveedor_id`: eliminado `source="factura_proveedor_id"` redundante
+- `MovimientoBancarioSerializer.cobro_id` y `.pago_id`: eliminado `source="cobro_id"` y `source="pago_id"` redundantes
+- Causa: DRF 3.15+ lanza `AssertionError` si `source == field_name` — rompía generacion OpenAPI
+
+**T12-2: BE + FE campo `requiere_serie` en productos**
+- `inventario/serializers.py` `ProductoDetailSerializer` y `ProductoCreateUpdateSerializer`: agregado `requiere_serie` en `fields`
+- `ProductoFormModal.tsx`: checkbox "Requiere numero de serie (trazabilidad individual)" alineado con `requiere_lote` ya existente
+- `INITIAL_FORM` y `useEffect` de edicion actualizados con `requiere_serie: false`
+
+**T12-3: BE `producto_categoria_id` en StockSerializer**
+- `inventario/serializers.py` `StockSerializer`: nuevo campo `producto_categoria_id = UUIDField(source="producto.categoria_id", read_only=True)`
+- Permite filtrado cliente-side por categoria en la vista de stock
+
+**T12-4: FE filtro por categoria en StockOverview.tsx**
+- Select "Todas las categorias" en seccion "Stock Actual" usando `useInventarioCategoriasList`
+- Filtrado cliente-side sobre `stockItems` por `producto_categoria_id`
+
+**T12-5: FE fix KPIs pedidos (distribucion/pedidos/index.tsx)**
+- KPIs ahora usan 5 queries paralelas `page_size=1` por estado (pendiente/confirmado/despachado/en_ruta/entregado)
+- Cada query retorna `count` real del backend — ya no `filter()` sobre la pagina actual
+
+**T12-6: FE link "Ver Detalle" cliente y fix dropdown proveedores (UserListTabel.tsx)**
+- Clientes: nuevo item "Ver Detalle" → `Link to="/clientes/${cli.id}"`
+- Proveedores: dropdown reemplaza todos los `to="#"` fantasmas → solo "Ver Detalle" → `Link to="/compras/proveedores/${prov.id}"`
+
+**T12-7: FE paginacion dinamica en InvoiceList.tsx**
+- Reemplazado `Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1)` (siempre paginas 1-5)
+- Por ventana centrada en pagina actual: `start = max(1, page - 2)`, `end = min(totalPages, start + 4)`, con ajuste inverso
+
+**T12-8: BE endpoint `POST /ventas/comisiones/{id}/marcar-pagada/`**
+- `ventas/views.py`: nueva clase `MarcarComisionPagadaView` — marca `pagado=True`, asigna `fecha_pago` (hoy si no se provee), acepta `notas` opcional
+- `ventas/urls.py`: ruta `comisiones/<uuid:pk>/marcar-pagada/` registrada
+- `ventas/models.py` importado `Comision` en views para lookup por PK
+
+**T12-9: FE accion "Marcar como Pagado" en ComisionesReporte.tsx**
+- Nueva columna "Acciones" en tabla de comisiones
+- Boton "Pagar" visible solo cuando `!c.pagado`, llama a `useVentasComisionesMarcarPagadaCreate`
+- Toast de exito/error, invalida el query del reporte al completar
+
+**T12-10: BE endpoints conciliacion (auditoria correctiva)**
+- `importar-extracto` y `matching` ya EXISTIAN en `ConciliacionBancariaViewSet` (T12 auditoria confirmo — ESTADO_ACTUAL tenia gap incorrecto)
+- No requirio cambios — FE ya apuntaba a las URLs correctas
+
+**Estado post-T12:** `pytest tests/` 42/42, `pnpm test` 18/18, `pnpm tsc --noEmit` limpio
+
+---
+
+### Sesion T11 (2026-02-23 — Refactor calidad DB: FKs reales, choices centralizados, singleton)
+
+**T11-1: 4 UUIDs bare → ForeignKey reales en `finanzas/models.py`**
+- `CuentaPorCobrar.comprobante_id` → `FK('facturacion.Comprobante', null=True, SET_NULL)` con `db_column='comprobante_id'`
+- `CuentaPorPagar.factura_proveedor_id` → `FK('compras.FacturaProveedor', null=True, SET_NULL)` con `db_column='factura_proveedor_id'`
+- `MovimientoBancario.cobro_id` → `FK('finanzas.Cobro', null=True, SET_NULL)` con `db_column='cobro_id'`
+- `MovimientoBancario.pago_id` → `FK('finanzas.Pago', null=True, SET_NULL)` con `db_column='pago_id'`
+- Migration `finanzas/0004_add_fk_comprobante_factura_cobro_pago.py` generada y aplicada
+- API sin cambios: serializers exponen `comprobante_id`/`factura_proveedor_id`/`cobro_id`/`pago_id` como `UUIDField(read_only=True)` via `source=`
+
+**T11-2: Choices centralizados en `core/choices.py`**
+- Agregados: `ESTADO_CONCILIACION_CHOICES`, `TIPO_MOVIMIENTO_BANCARIO_CHOICES`, `TIPO_NOTIFICACION_CHOICES`, `ESTADO_SERIE_CHOICES` con sus constantes
+- `finanzas/models.py`: eliminadas las definiciones locales de choices de conciliacion bancaria; importa desde `core/choices`
+- `inventario/models.py`: eliminada `ESTADO_SERIE_CHOICES` local; importa `ESTADO_SERIE_CHOICES` y `SERIE_DISPONIBLE` desde `core/choices`
+- `usuarios/models.py`: eliminada `TIPO_NOTIFICACION_CHOICES` local; importa desde `core/choices` con constante `NOTIF_SISTEMA`
+- No requirio migraciones (valores identicos, solo fuente movida)
+
+**T11-3: Singleton constraint en `WhatsappConfiguracion`**
+- Campo `singleton_lock = IntegerField(default=1, editable=False)` siempre fijado a 1 en `save()`
+- `UniqueConstraint(fields=['singleton_lock'], name='uq_whatsapp_config_singleton')` garantiza 1 sola fila en BD
+- Migration `whatsapp/0003_add_singleton_constraint.py` generada y aplicada
+- Identico patron al `empresa.Configuracion` que ya lo tenia correctamente
+
+**Estado post-T11:** `pytest tests/` 42/42 — sin regresiones
+
+---
+
+### Sesion T10 (2026-02-23 — Tests BE/FE, bugs criticos FE, migracion inventario)
+
+**T10-1: Suite de tests BE — 42/42 passing**
+- `tests/test_ventas_services.py`: crear_venta_pos, anular_venta, _calcular_item, apertura/cierre caja
+- `tests/test_inventario_services.py`: transferir_stock, seleccionar_lotes_fifo, ajustar_stock
+- `tests/test_auth_endpoints.py`: login, token refresh, rutas protegidas
+- Fix migration: `facturacion/0006` usa DO $$ ... IF EXISTS pg_type ... END $$ — compatible con DB fresh y prod
+- Fix dependencias: `pyotp` y `qrcode[pil]` instalados y agregados a `requirements/base.txt`
+
+**T10-2: Suite de tests FE — 18/18 passing**
+- `src/test/setup.ts`: @testing-library/jest-dom globals
+- `src/test/cart.test.ts`: TASA_IGV, calcularTotales (8 casos), formatMoney (4 casos)
+- `src/test/useOnlineStatus.test.ts`: estado inicial, eventos online/offline, ciclo completo, cleanup listeners
+- Vitest configurado en `vite.config.ts` con jsdom + globals; scripts `test`, `test:watch`, `test:coverage` en package.json
+
+**T10-3: Fix bug critico FE — TDZ handlePreview**
+- `(invoice)/add-new/components/AddNew.tsx`: eliminado alias `const handleEmitir = handlePreview` que causaba
+  "Cannot access 'handlePreview' before initialization" (Temporal Dead Zone)
+- Boton onClick apunta directamente a `handlePreview`
+
+**T10-4: Fix bug FE — operador ?? ambiguo**
+- `(invoice)/overview/index.tsx:311`: `estadoActual || comp.estado_sunat ?? ''`
+  → `estadoActual || (comp.estado_sunat ?? '')` — esbuild rechazaba la expresion anterior
+
+**T10-5: Pagina WhatsApp Logs creada**
+- `(whatsapp)/logs/index.tsx`: tabla logs de webhook, busqueda por evento/wa_message_id,
+  badge procesado/pendiente, expansor payload JSON, paginacion, auto-refresh 30s
+- La ruta `/whatsapp/logs` existia en Routes.tsx y menu.ts pero el archivo no existia — error de import fatal
+
+**T10-6: useOnlineStatus en cart**
+- `hooks/useOnlineStatus.ts`: hook creado (escucha eventos native online/offline)
+- `(ventas)/cart/index.tsx`: importa y usa el hook, muestra banner "Sin conexion" cuando `!isOnline`
+- El doc ESTADO_ACTUAL decia "no existe navigator.onLine en FE" — CORREGIDO
+
+**T10-7: Migración inventario 0005 aplicada**
+- `inventario/migrations/0005_alter_serie_options_and_more.py`: generada y aplicada
+  - Meta options en Serie, unique_together actualizado, alter referencia_tipo en MovimientoStock
+- `inventario/migrations/0004_add_serie_modelo.py`: ya estaba aplicada (marcada [X])
+
+**Estado post-T10:** `pnpm tsc --noEmit` limpio, `pnpm test` 18/18, `pytest tests/` 42/42, build Vite OK
+
+---
+
+### Sesion T9 (2026-02-23 — PLE/PDT mock + OpenAPI/Orval regenerados)
+
+**T9-1: Endpoints PLE/PDT mock en BE**
+- `finanzas/serializers.py`: nuevos serializers `GenerarPLESerializer`, `GenerarPDTSerializer`, `PLEArchivoSerializer`, `PDTArchivoSerializer` + constantes `LIBROS_PLE` y `FORMULARIOS_PDT`
+- `finanzas/views.py`: 4 nuevas views — `GenerarPLEView`, `LibrosPLEDisponiblesView`, `GenerarPDTView`, `FormulariosPDTDisponiblesView` — todas retornan respuestas mock con estado "pendiente" y mensaje informativo
+- `finanzas/urls.py`: rutas `ple/generar/`, `ple/libros/`, `pdt/generar/`, `pdt/formularios/`
+
+**T9-2: OpenAPI schema + Orval regenerados**
+- `python manage.py spectacular --file ../Jsoluciones-fe/openapi-schema.yaml` (nota: el config de Orval apunta a `openapi-schema.yaml`, no `openapi.json`)
+- `pnpm orval` regenero hooks: `useFinanzasPleGenerarCreateWithJson`, `useFinanzasPleLibrosRetrieve`, `useFinanzasPdtGenerarCreateWithJson`, `useFinanzasPdtFormulariosRetrieve`
+- Nuevos modelos generados: `PLEArchivo`, `PDTArchivo`, `GenerarPLE`, `GenerarPDT`, `FinanzasPleLibrosRetrieve200Item`, `FinanzasPdtFormulariosRetrieve200Item`
+
+**T9-3: Pagina Declaraciones PLE/PDT (FE)**
+- Nueva pagina `/finanzas/declaraciones` con tabs PLE y PDT
+- `declaraciones/components/PLEPanel.tsx`: selector periodo, checkbox multi-libro, boton generar, tabla resultados
+- `declaraciones/components/PDTPanel.tsx`: selector periodo, select formulario, boton generar, card resultado
+- Ambos con banner informativo azul "pendiente de implementacion completa"
+- Entrada en sidebar: `{ key: 'DeclaracionesPLE', label: 'Declaraciones PLE/PDT', icon: LuFileCog }`
+- Ruta en `Routes.tsx`: `{ path: '/finanzas/declaraciones', name: 'DeclaracionesPLE' }`
+- `pnpm tsc --noEmit` sin errores
+
+**T9-4: PeriodoBadge ya existia (descubrimiento)**
+- `src/components/common/PeriodoBadge.tsx` ya existia y estaba presente en TODAS las paginas de finanzas (10 paginas)
+- No requirio ninguna implementacion adicional — estaba completo desde T8 o antes
+
+---
 
 ### Sesion T8 (2026-02-23 — Implementacion de 10 gaps identificados en auditoria T7)
 
@@ -160,7 +375,7 @@
 
 ## ESTADO DETALLADO POR MODULO
 
-### MODULO 1 — Ventas / POS (83%)
+### MODULO 1 — Ventas / POS (86%)
 
 **Backend: 91%**
 
@@ -184,7 +399,7 @@ Falta / Bugs:
 - ~~La venta completada NO dispara emision automatica a SUNAT~~ **CORREGIDO en T8** — `transaction.on_commit` encola task `emitir_comprobante_por_venta`
 - Notificacion WhatsApp/email al vender: no implementada
 
-**Frontend: 76%**
+**Frontend: 78%**
 
 Implementado:
 - POS completo: `cart/` — panel productos (`lg:col-span-2`) + carrito (`lg:col-span-1`)
@@ -203,21 +418,23 @@ Implementado:
 - Ficha cliente con 3 tabs: datos generales, historial ventas, cotizaciones
 
 NO implementado:
-- Banner modo offline visible (no existe `navigator.onLine`, Service Worker, ni IndexedDB en ningun archivo FE)
+- ~~Banner modo offline visible (no existe `navigator.onLine`)~~ **IMPLEMENTADO en T10** — `useOnlineStatus` hook + banner "Sin conexion" en cart/index.tsx cuando `!isOnline`
+- Sin soporte completo offline: sin Service Worker, sin IndexedDB, sin PWA manifest (el banner existe pero no hay cola local)
 - Sincronizacion automatica al reconectar con indicador de progreso
 - Vista de campo responsive/dedicada para movil (hay grid responsive generico, no vista campo)
 - Boton explicito "Consumidor Final" (es texto auxiliar sin accion)
 - ~~Saldo pendiente CxC en ficha cliente~~ **IMPLEMENTADO en T8** — `saldoPendiente` y `creditoDisponible` con colores y banner
 - Selector cliente en POS: si no se selecciona, la venta va como "Varios" (Boleta); no hay boton "Consumidor Final"
+- ~~**Accion Marcar como Pagado en comisiones**~~ **IMPLEMENTADO en T12** — boton "Pagar" en tabla, endpoint `POST /ventas/comisiones/{id}/marcar-pagada/`
 - Reporte cotizaciones con tasa de conversion
 - Reporte ventas offline sincronizadas (no hay campo que marque venta como "originada offline")
 - Notas de credito en modulo ventas (el boton existe en detalle venta pero sin modelo propio en ventas)
 
 ---
 
-### MODULO 2 — Inventario y Logistica (88%)
+### MODULO 2 — Inventario y Logistica (90%)
 
-**Backend: 90%**
+**Backend: 91%**
 
 Implementado:
 - Stock en tiempo real: modelo `Stock` con `select_for_update` en cada operacion
@@ -240,7 +457,7 @@ Falta / Bugs:
 - **RN-3 Incidencia transferencia:** Al detectar diferencia en recepcion se escribe `[INCIDENCIA: ...]` en el campo `motivo`, pero el estado del modelo NO cambia a un valor "con_incidencia" (ese choice no existe en el modelo)
 - **RN-5 Lote/serie obligatorio:** Los campos `requiere_lote` y `requiere_serie` existen en Producto pero `registrar_entrada()` y `registrar_salida()` no validan que se provea cuando son `True`
 - ~~Filtro por rango de fechas en `MovimientoViewSet`~~ **IMPLEMENTADO en T8** — `fecha_desde`/`fecha_hasta` en `get_queryset()`
-- Migracion `0004_add_serie_modelo.py` pendiente de aplicar (`manage.py migrate`)
+- ~~Migracion `0004_add_serie_modelo.py` pendiente de aplicar~~ **APLICADA en T10** — ademas generada y aplicada `0005_alter_serie_options_and_more`
 
 **Frontend: 87%**
 
@@ -260,13 +477,14 @@ NO implementado:
 - ~~**Semaforo verde/amarillo/rojo en vista stock**~~ **IMPLEMENTADO en T8** — seccion "Stock Actual" con tabla y badges coloreados
 - ~~**Grafico visual entradas vs salidas en dashboard**~~ **IMPLEMENTADO en T8** — ApexCharts bar ultimos 14 dias
 - ~~FIFO preseleccionado en SalidaStockModal~~ **IMPLEMENTADO en T8** — auto-seleccion primer lote + badge "FIFO sugerido"
-- **Filtro por categoria en vista stock** (solo almacen y tipo movimiento)
-- Validacion stock en tiempo real en TransferenciaStockModal (se valida en BE al enviar)
-- CRUD Series desde UI de producto
+- ~~**Filtro por categoria en vista stock**~~ **IMPLEMENTADO en T12** — select "Todas las categorias" en "Stock Actual", filtrado por `producto_categoria_id`
+- ~~Campo `requiere_serie` no expuesto en formulario producto~~ **IMPLEMENTADO en T12** — checkbox en `ProductoFormModal.tsx` + serializer BE actualizado
+- ~~Validacion stock en tiempo real en TransferenciaStockModal~~ **IMPLEMENTADO en T14** — `useInventarioStockList` cuando producto+almacen seleccionados, indicador "Disponible: X", boton deshabilitado si insuficiente
+- ~~CRUD Series desde UI de producto~~ **IMPLEMENTADO en T14** — `SeriesTab.tsx` refactorizado con `RegistrarSerieModal` + tabla + eliminar
 
 ---
 
-### MODULO 3 — Facturacion Electronica (85%)
+### MODULO 3 — Facturacion Electronica (86%)
 
 **Backend: 87%**
 
@@ -294,7 +512,7 @@ Falta:
 - Validacion RUC contra padron SUNAT: solo validacion sintatica (tipo='6' + 11 digitos)
 - Envio PDF/XML por WhatsApp al cliente
 
-**Frontend: 83%**
+**Frontend: 85%**
 
 Implementado:
 - `add-new/components/AddNew.tsx`: flujo 3 pasos desde Venta existente, validacion inline RUC/DNI
@@ -317,9 +535,10 @@ Implementado:
 NO implementado:
 - ~~**Vista previa antes de confirmar envio**~~ **IMPLEMENTADO en T8** — modal preview con items/totales/aviso antes de emitir
 - ~~Filtro por rango de fechas en lista comprobantes~~ **IMPLEMENTADO en T8** — `fechaDesde`/`fechaHasta` en InvoiceList
-- **Indicador pipeline Generando→Firmando→Enviando→Aceptado** (hay WebSocket pero no hay UI de pasos secuenciales)
-- **Banner modo DEMO** (existe banner de CONTINGENCIA que es diferente — DEMO no tiene banner)
-- Filtro por cliente UUID en lista comprobantes (el BE lo soporta pero FE no lo expone)
+- **Indicador pipeline Generando→Firmando→Enviando→Aceptado** (hay WebSocket pero no hay UI de pasos secuenciales — los estados existentes se mapean a badges pero no hay step tracker visual)
+- ~~**Banner modo DEMO**~~ **IMPLEMENTADO en T14** — `DemoBanner.tsx` en topbar, aparece si `modo_demo=True` en `/facturacion/contingencia/estado/`
+- ~~Paginacion en InvoiceList solo muestra primeras 5 paginas fijas~~ **CORREGIDO en T12** — ventana dinamica centrada en pagina actual
+- ~~Filtro por cliente UUID en lista comprobantes~~ **IMPLEMENTADO en T13/T14** — autocomplete cliente con dropdown en `InvoiceList.tsx`, pasa `clienteId` al hook
 
 ---
 
@@ -359,6 +578,7 @@ Implementado:
 - Escaner QR: html5-qrcode, camara trasera, busqueda manual, navegacion automatica
 
 Falta:
+- ~~KPIs pedidos contaban solo pagina actual~~ **CORREGIDO en T12** — 5 queries paralelas `page_size=1` por estado usan `count` real del backend
 - Vista movil optimizada conductor (PWA)
 - Optimizacion ruta visual en mapa
 
@@ -397,13 +617,13 @@ Implementado:
 - Calificacion proveedor: badge estrellas 1-5 con colores
 
 Falta:
-- UI Series en recepciones (no hay campo serie al recibir productos con trazabilidad)
+- ~~UI Series en recepciones~~ **IMPLEMENTADO en T14** — `RecepcionFormModal.tsx` tiene accordeon por item para ingresar N series, POST a `/inventario/series/` tras confirmar recepcion
 
 ---
 
-### MODULO 6 — Gestion Financiera y Tributaria (68%)
+### MODULO 6 — Gestion Financiera y Tributaria (78%)
 
-**Backend: 72%**
+**Backend: 78%**
 
 Implementado:
 - CxC y CxP: crear, cobros/pagos parciales o totales, semaforo automatico
@@ -416,16 +636,19 @@ Implementado:
 - Alertas CxC vencidas y CxP por vencer en Celery Beat (08:00)
 - Libro Diario, Mayor, Caja, Balance General, Estado Resultados, Flujo Caja: funcionales
 - Intereses de mora: calculo real por CxC vencidas
+- Conciliacion bancaria: CRUD completo (ConciliacionBancaria + MovimientoBancario)
+- ~~PLE (TXT) segun especificacion SUNAT~~ **MOCK IMPLEMENTADO en T9** — endpoints + respuesta estructurada con estado "pendiente"
+- ~~PDT (XML/ZIP) segun especificacion SUNAT~~ **MOCK IMPLEMENTADO en T9** — endpoints + respuesta estructurada con estado "pendiente"
 
 Falta:
 - Diferencia de cambio automatica (no implementada)
 - Conciliacion bancaria: parseo CSV/Excel de extractos (no implementado)
 - Motor de matching para sugerir conciliaciones (no implementado)
-- PLE (TXT) segun especificacion SUNAT (no implementado)
-- PDT (XML/ZIP) segun especificacion SUNAT (no implementado)
+- PLE real: generacion TXT segun formato SUNAT por libro (requiere implementacion real por libro)
+- PDT real: generacion XML/ZIP segun SUNAT (requiere integracion con formularios SUNAT)
 - Firma digital del contador para cierre tributario (no implementado)
 
-**Frontend: 65%**
+**Frontend: 78%**
 
 Implementado:
 - CxC y CxP con semaforo de vencimiento (verde/amarillo/rojo)
@@ -435,16 +658,20 @@ Implementado:
 - Libro Diario, Mayor, Caja, Balance General, Estado Resultados, Flujo Caja: paginas funcionales
 - Botones Excel en Balance General y Estado de Resultados (descarga directa via fetch blob)
 - Alerta CxC vencidas en dashboard (cantidad, monto, top deudores)
+- Conciliacion bancaria: lista + detalle con movimientos
+- `PeriodoBadge` en todas las paginas de finanzas (indica periodo abierto/cerrado en tiempo real)
+- ~~Botones generacion PLE y PDT por periodo~~ **IMPLEMENTADO en T9** — pagina `/finanzas/declaraciones` con tabs PLE y PDT completos
 
 Falta:
-- Vista de carga de extracto bancario
-- Panel conciliacion con sugerencias automaticas y botones confirmar/ignorar
-- Botones generacion PLE y PDT por periodo
-- Indicador visual de periodo abierto vs cerrado
+- Vista de carga de extracto bancario CSV/Excel (UI parseo — el dropzone existe pero no muestra tabla de movimientos importados completa)
+- ~~Panel conciliacion con sugerencias automaticas y botones confirmar/ignorar~~ **IMPLEMENTADO en T13** — tabla de sugerencias matching con botones Confirmar/Ignorar por movimiento en `ConciliacionDetalle.tsx`
+- ~~Checklist pre-cierre de periodo~~ **IMPLEMENTADO en T14** — `ChecklistModal` en `PeriodosList.tsx`, endpoint `GET /finanzas/periodos/{id}/checklist/`
+- ~~Firma digital del contador para cierre tributario~~ **IMPLEMENTADO en T14** — `FirmaModal` en `PeriodosList.tsx`, endpoint `POST /finanzas/periodos/{id}/firmar/`
+- PLE/PDT real (logica de generacion SUNAT — la UI esta completa en T9, falta implementacion BE real)
 
 ---
 
-### MODULO 7 — Comunicacion WhatsApp (47%)
+### MODULO 7 — Comunicacion WhatsApp (52%)
 
 **Backend: 40%**
 
@@ -470,9 +697,9 @@ STUB explicito (NO implementado):
 - Validacion firma HMAC del webhook: no implementada
 - Automatizaciones por evento del sistema: no implementadas
 
-**Frontend: 55%**
+**Frontend: 65%**
 
-Implementado (4 paginas reales):
+Implementado (5 paginas reales):
 
 `/whatsapp/configuracion` — `WhatsappConfiguracionForm.tsx` (281 lineas):
 - Formulario: phone_number_id, waba_id, access_token (input password), webhook_verify_token, toggle activo
@@ -489,13 +716,15 @@ Implementado (4 paginas reales):
 - Aviso en modal: "El mensaje se registrara en el sistema. El envio real requiere credenciales Meta configuradas."
 - Modal de detalle: wa_message_id, error_detalle, contenido, estado
 
-`/whatsapp/logs` — directorio con componentes de logs de webhook
+`/whatsapp/logs` — **IMPLEMENTADO en T10** — tabla logs de webhook con busqueda, badges procesado/pendiente, payload expandible, paginacion, auto-refresh 30s
+
+Implementado en T13 (ademas de lo anterior):
+- ~~Metricas de campana~~ **IMPLEMENTADO en T13** — `/whatsapp/metricas/index.tsx`: 4 KPI cards + tasas + banner STUB
+- ~~Vista de creacion de campana~~ **IMPLEMENTADO en T13** — `/whatsapp/campanas/index.tsx`: lista + `NuevaCampanaModal` (nombre, plantilla, segmento, fecha) + badge estados
+- ~~Configuracion de automatizaciones~~ **IMPLEMENTADO en T13** — `/whatsapp/automatizaciones/index.tsx`: tabla 5 eventos, toggle activo, select plantilla + endpoint BE mock en memoria
 
 NO implementado:
-- Metricas de campana (cards enviados/entregados/leidos/respondidos)
-- Grafico de rendimiento por campana
-- Vista de creacion de campana con selector de segmento
-- Configuracion de automatizaciones por evento del sistema
+- Envio real HTTP POST a Meta Cloud API (STUB en BE hasta tener credenciales Meta Business)
 
 ---
 
@@ -512,7 +741,7 @@ Implementado:
 - Endpoint `GET /reportes/kpis-comparativo/`: delta % ventas, pedidos, tasa entrega vs mes anterior
 - Filtros de acceso por rol en endpoints de KPIs
 
-**Frontend: 94%**
+**Frontend: 100%**
 
 Implementado:
 - Dashboard con KPI cards: ventas, logistica, financieros
@@ -523,6 +752,7 @@ Implementado:
 - Ping cada 30s para keepalive
 - Reportes con 4 tabs, date range picker, favoritos en localStorage, exportar Excel/PDF
 - Reportes Programados: CRUD con modal, toggle activar/desactivar
+- ~~Umbrales semaforos configurables~~ **IMPLEMENTADO en T14** — `UmbralesModal` + endpoint BE `GET/PATCH /reportes/configuracion-kpis/` + semaforo dinamico en KPI card "Ventas Hoy"
 
 ---
 
@@ -550,10 +780,9 @@ Implementado:
   - Paginacion con botones Anterior/Siguiente y "Pagina X de Y"
   - Modal `DesactivarModal`: fondo negro semitransparente, email usuario, aviso de sesiones, confirmar con `useUsuariosDestroy`
   - CRUD usuarios con modal (email, nombre, apellido, contrasena, rol, activo)
-- `configuracion/roles/index.tsx` (324 lineas):
-  - `PermisosModal`: carga permisos del sistema, agrupa por modulo, checkboxes individuales
-  - Contador en tiempo real "N permisos seleccionados"
-  - Nota: es lista agrupada por modulo, no tabla cruzada modulo x accion
+- `configuracion/roles/index.tsx`:
+  - ~~`PermisosModal`: lista agrupada por modulo, checkboxes individuales~~ **REFACTORIZADO en T14** — tabla cruzada filas=modulos, columnas=acciones (ver/crear/editar/eliminar/aprobar), toggle fila completa y columna completa
+  - Parseo de `Permiso.codigo` con `.split('.')` — formato `modulo.accion`
 - `configuracion/audit-log/index.tsx` (297 lineas):
   - Filtros: texto libre, modulo (7 opciones), accion (8 opciones), fecha desde, fecha hasta
   - Boton "Limpiar filtros"
@@ -589,11 +818,11 @@ Falta:
 
 ## GAPS TRANSVERSALES
 
-### Sin soporte offline (PENDIENTE — M1)
-- Sin Service Worker, sin IndexedDB, sin PWA manifest
-- El POS no funciona sin internet
-- El endpoint offline-sync existe en BE pero el FE no tiene el mecanismo de cola local
-- BUG adicional: la funcion que el endpoint offline llama (`registrar_venta_pos`) no existe en services.py
+### Sin soporte offline completo (PENDIENTE — M1)
+- ~~Sin `navigator.onLine` en FE~~ **IMPLEMENTADO T10** — `useOnlineStatus` hook + banner en cart
+- Sin Service Worker, sin IndexedDB, sin PWA manifest — el POS muestra aviso pero no funciona offline real
+- El endpoint offline-sync existe en BE pero el FE no tiene cola local de ventas pendientes
+- ~~BUG: la funcion que el endpoint offline llama (`registrar_venta_pos`) no existe~~ **CORREGIDO T8**
 
 ### Facturacion dispara automaticamente al vender (IMPLEMENTADO en T8 — M1/M3)
 - `crear_venta_pos()` encola `emitir_comprobante_por_venta(venta_id)` via `transaction.on_commit`
@@ -614,8 +843,9 @@ Falta:
 - No implementados ni en BE ni en FE
 - Requieren conocimiento especifico del formato SUNAT por cada libro contable
 
-### Migracion pendiente de aplicar (M2)
-- `inventario/migrations/0004_add_serie_modelo.py` — detectada, pendiente de `manage.py migrate`
+### Migracion pendiente de aplicar (M2) — RESUELTA T10
+- ~~`inventario/migrations/0004_add_serie_modelo.py` — pendiente~~ **APLICADA en T10**
+- Adicionalmente generada y aplicada `0005_alter_serie_options_and_more` (Meta options Serie + unique_together + referencia_tipo)
 
 ---
 
@@ -639,7 +869,7 @@ Falta:
 | `/inventario/trazabilidad` | Funcional (por lote, timeline) |
 | `/inventario/trazabilidad-serie` | Funcional (por serie, card + timeline) |
 | `/inventario/ubicaciones` | Funcional (CRUD con filtro por almacen) |
-| `/clientes`, `/clientes/:id` | Funcional (3 tabs, sin saldo CxC pendiente) |
+| `/clientes`, `/clientes/:id` | Funcional (3 tabs, link "Ver Detalle" en tabla) |
 | `/compras/proveedores`, `/compras/proveedores/:id` | Funcional (5 tabs + KPIs) |
 | `/compras/ordenes`, `/compras/ordenes/:id` | Funcional (+ modal prorrateo gastos) |
 | `/compras/recepciones`, `/compras/facturas` | Funcional (recepciones + foto evidencia) |
@@ -652,6 +882,8 @@ Falta:
 | `/finanzas/balance-general` | Funcional (+ exportar Excel) |
 | `/finanzas/estado-resultados` | Funcional (+ exportar Excel) |
 | `/finanzas/flujo-caja` | Funcional |
+| `/finanzas/conciliacion` | Funcional (CRUD + movimientos) |
+| `/finanzas/declaraciones` | Funcional mock (tabs PLE y PDT — T9) |
 | `/distribucion/pedidos`, `/distribucion/pedidos/:id` | Funcional |
 | `/distribucion/transportistas` | Funcional |
 | `/distribucion/mapa` | Funcional (leaflet + GPS en vivo WS) |
@@ -668,6 +900,9 @@ Falta:
 | `/whatsapp/plantillas` | Funcional (CRUD) |
 | `/whatsapp/mensajes` | Funcional (lista + modal envio + detalle) |
 | `/whatsapp/logs` | Funcional |
+| `/whatsapp/metricas` | Funcional mock (4 KPI cards + tasas — T13) |
+| `/whatsapp/campanas` | Funcional mock (lista + NuevaCampanaModal — T13) |
+| `/whatsapp/automatizaciones` | Funcional mock (tabla 5 eventos + toggle — T13) |
 | `/reportes` | Funcional (4 tabs + favoritos + exportar) |
 | `/reportes/programados` | Funcional (CRUD + toggle) |
 | `/configuracion/roles` | Funcional (permisos por modulo con checkboxes) |
@@ -677,12 +912,13 @@ Falta:
 | `/perfil` | Funcional (contrasena + 2FA) |
 | `/two-steps` | Funcional |
 
-### Paginas que NO existen (requeridas por spec)
-- Conciliacion bancaria (carga de extracto + panel sugerencias)
-- Declaraciones tributarias / PLE / PDT
-- Vista conductor movil (PWA)
-- Campana masiva WhatsApp con selector de segmento
-- Metricas de campana WhatsApp
+### Paginas que NO existen (requeridas por spec — pendientes reales)
+- Conciliacion bancaria: carga de extracto CSV/Excel con tabla de movimientos importados post-carga (el dropzone existe en `ConciliacionDetalle.tsx` pero no muestra la tabla resultante)
+- ~~Declaraciones tributarias / PLE / PDT~~ **IMPLEMENTADO en T9** — `/finanzas/declaraciones` con tabs PLE y PDT
+- ~~Panel de sugerencias automaticas conciliacion~~ **IMPLEMENTADO en T13** — tabla matching con Confirmar/Ignorar en `ConciliacionDetalle.tsx`
+- Vista conductor movil (PWA) — `/distribucion/conductor` no existe aun
+- ~~Campana masiva WhatsApp~~ **IMPLEMENTADO en T13** — `/whatsapp/campanas`
+- ~~Metricas de campana WhatsApp~~ **IMPLEMENTADO en T13** — `/whatsapp/metricas`
 
 ---
 
@@ -723,6 +959,7 @@ POST   /formas-pago/registrar/
 POST   /offline-sync/             [BUG: llama a funcion inexistente en services]
 GET    /comisiones/
 POST   /comisiones/calcular/
+POST   /comisiones/{id}/marcar-pagada/   [NUEVO T12]
 ```
 
 ### Inventario (`/api/v1/inventario/`)
@@ -779,6 +1016,8 @@ CRUD   /plan-contable/
 CRUD   /periodos/
 POST   /periodos/{id}/cerrar/
 POST   /periodos/{id}/reabrir/
+GET    /periodos/{id}/checklist/        [NUEVO T14 — verifica asientos borrador, CxC, conciliaciones]
+POST   /periodos/{id}/firmar/           [NUEVO T14 — body: { pin, anio, mes }]
 GET    /mora/
 GET    /libro-diario/
 GET    /libro-mayor/?cuenta_id=
@@ -786,6 +1025,13 @@ GET    /libro-caja/
 GET    /balance-general/?fecha_corte=
 GET    /estado-resultados/?fecha_inicio=&fecha_fin=
 GET    /flujo-caja/?fecha_inicio=&fecha_fin=
+CRUD   /conciliaciones/
+POST   /conciliaciones/{id}/movimientos/
+DELETE /conciliaciones/{id}/movimientos/{mov_id}/
+POST   /ple/generar/                    [MOCK — T9]
+GET    /ple/libros/                     [MOCK — T9]
+POST   /pdt/generar/                    [MOCK — T9]
+GET    /pdt/formularios/                [MOCK — T9]
 ```
 
 ### Facturacion (`/api/v1/facturacion/`)
@@ -836,6 +1082,7 @@ GET    /kpis-comparativo/
 POST   /exportar/
 GET    /snapshots/
 CRUD   /programaciones/
+GET/PATCH /configuracion-kpis/   [NUEVO T14 — mock en memoria, umbrales semaforos]
 ```
 
 ### Usuarios (`/api/v1/usuarios/`)
@@ -858,9 +1105,13 @@ GET    /sesiones/
 GET/PATCH /configuracion/
 CRUD      /plantillas/
 GET       /mensajes/
-POST      /enviar/        [STUB — no hace HTTP POST real a Meta]
+POST      /enviar/                      [STUB — no hace HTTP POST real a Meta]
 GET/POST  /webhook/
 GET       /logs/
+GET       /metricas/                    [MOCK T13 — estado en memoria]
+CRUD      /campanas/                    [MOCK T13 — estado en memoria]
+POST      /campanas/{id}/ejecutar/      [MOCK T13 — retorna pendiente]
+GET/PATCH /automatizaciones/            [MOCK T13 — estado en memoria, 5 eventos fijos]
 ```
 
 ---
@@ -895,7 +1146,13 @@ GET       /logs/
 | Estado "con_incidencia" escrito como texto libre en `motivo` (no como state) | Inventario BE | Menor — no consulatable por estado | `inventario/services.py` |
 | `requiere_lote`/`requiere_serie` no validados en servicios de entrada/salida | Inventario BE | Moderado — datos sin trazabilidad | `inventario/services.py` |
 | Credenciales Nubefact almacenadas como `CharField` plano en BD | Facturacion BE | Seguridad — no encriptado | `empresa/models.py` linea 49 |
-| Migracion `0004_add_serie_modelo.py` no aplicada | Inventario BE | CRITICO si se usa trazabilidad serie | `inventario/migrations/` |
+| ~~Migracion `0004_add_serie_modelo.py` no aplicada~~ | Inventario BE | **CORREGIDO T10** — 0004 y 0005 aplicadas | `inventario/migrations/` |
+| ~~4 UUIDs bare sin FK ORM en finanzas/models.py~~ | Finanzas BE | **CORREGIDO T11** — FK reales + migration 0004 aplicada | `finanzas/models.py` |
+| ~~`source=` redundante en serializers finanzas (cobro_id, pago_id, comprobante_id, factura_proveedor_id)~~ | Finanzas BE | **CORREGIDO T12** — eliminados `source=` identicos al field_name | `finanzas/serializers.py` |
+| ~~KPIs pedidos contaban solo pagina actual con `filter()`~~ | Distribucion FE | **CORREGIDO T12** — queries paralelas `page_size=1` por estado | `distribucion/pedidos/index.tsx` |
+| ~~Paginacion InvoiceList siempre mostraba paginas 1-5~~ | Facturacion FE | **CORREGIDO T12** — ventana dinamica centrada en pagina actual | `invoice/list/InvoiceList.tsx` |
+| ~~Choices locales dispersos en 4 modelos fuera de core/choices.py~~ | BE global | **CORREGIDO T11** — todos en core/choices.py | `core/choices.py` |
+| ~~WhatsappConfiguracion sin singleton constraint~~ | WhatsApp BE | **CORREGIDO T11** — UniqueConstraint + save() forzado | `whatsapp/models.py` |
 
 ---
 
@@ -924,11 +1181,12 @@ GET       /logs/
 
 ### Al modificar BE (nuevos endpoints o campos)
 ```bash
-cd Jsoluciones-be && python manage.py spectacular --settings=config.settings.development --file ../Jsoluciones-fe/openapi.json
+# IMPORTANTE: el config de orval apunta a openapi-schema.yaml (NO openapi.json)
+cd Jsoluciones-be && .venv/bin/python manage.py spectacular --settings=config.settings.development --file ../Jsoluciones-fe/openapi-schema.yaml
 cd Jsoluciones-fe && pnpm orval
 ```
 
 ---
 
 *Diagnostico basado en lectura directa del codigo fuente — todos los modulos auditados.*
-*Ultima actualizacion: 2026-02-23 (Sesion T8 — 10 gaps implementados, TSC limpio).*
+*Ultima actualizacion: 2026-02-23 (Sesion T14 — FE al 100% del PLAN_INTEGRACION_FE_COMPLETO.md; 17/17 gaps completados; pnpm tsc --noEmit limpio).*

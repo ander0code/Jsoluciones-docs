@@ -1,42 +1,73 @@
-# JSoluciones ERP - Documentación
+# JSoluciones ERP — Documentacion
 
-> Repositorio de documentación completa del proyecto JSoluciones ERP.
+> Repositorio de documentacion del proyecto JSoluciones ERP.
+> Single-tenant. Sin multi-tenancy. Sin eCommerce. Una empresa por instalacion.
 
 ## Estructura
 
-- **`contexto/`** - Contexto técnico, plan de ejecución, estado actual y mapa de vistas
-- **`instrucciones/`** - Reglas de desarrollo para backend, frontend y base de datos
-- **`historial/`** - Documentación archivada y verificada
-- **`SQL_JSOLUCIONES.sql`** - Esquema completo de base de datos (47 tablas, 33 enums)
+```
+instrucciones/        — Reglas y spec (leer siempre antes de tocar codigo)
+  JSOLUCIONES_MODULOS_VERSION_FINAL.MD  — SPEC PRINCIPAL (fuente de verdad)
+  05_REGLAS_AGENTE.md                   — Reglas del agente de desarrollo
+  COMANDOS_CLAVE.md                     — Comandos de desarrollo (venv, pnpm, etc.)
+  REGLAS_BACKEND.md                     — Patrones y convenciones backend
+  REGLAS_FRONTEND.md                    — Patrones y convenciones frontend
+  PROCESOS_FRONTEND.md                  — Flujos y procesos frontend
 
-## Repositorios del Proyecto
+contexto/             — Estado actual y referencia tecnica
+  ESTADO_ACTUAL.md                      — Estado real por modulo (actualizado)
+  Jsoluciones_devops_service.md         — Arquitectura DevOps y servicios
+  Jsoluciones_Logistica_Backend.md      — Spec detallada logistica backend
+  Jsoluciones_roles_flujos.MD           — Roles de usuario y flujos de negocio
+  10 _mapa_template_tailwick.md         — Mapa de componentes UI del template
+  TEMPLATE_COMPONENTES_A_USAR.md        — Componentes UI disponibles
 
-| Repositorio | Descripción | URL |
-|------------|-------------|-----|
-| **Jsoluciones-be** | Django Backend (API REST) | `J-Soluciones/Jsoluciones-be` |
-| **Jsoluciones-fe** | React Frontend (Tailwick) | `J-Soluciones/Jsoluciones-fe` |
-| **Jsoluciones-docs** | Documentación (este repo) | `ander0code/Jsoluciones-docs` |
+historial/            — Documentos obsoletos o ya ejecutados (no leer)
 
-## Estado del Proyecto
+SQL_JSOLUCIONES.sql   — Esquema completo de BD (tablas, enums, indices)
+```
 
-Ver `contexto/19_ESTADO_ACTUAL_Y_VISTAS.md` para el estado actual del 50% del proyecto.
+## Estado del Proyecto (2026-02-22)
 
-### Progreso Actual
-- ✅ **Capa 0:** Infraestructura (Docker, Django, React)
-- ✅ **Capa 1:** Auth + Login (JWT, RBAC, permisos)
-- ⬜ **Capa 2:** Inventario (en desarrollo)
-- ⬜ **Capa 3:** Clientes + Ventas (POS)
-- ⬜ **Capa 4:** Facturación Nubefact
-- ⬜ **Capa 5:** Media + Proveedores
+| Modulo | Backend | Frontend | Promedio |
+|---|:---:|:---:|:---:|
+| Ventas / POS | 90% | 78% | 84% |
+| Inventario | 92% | 90% | 91% |
+| Facturacion Electronica | 85% | 72% | 78% |
+| Distribucion y Seguimiento | 88% | 85% | 86% |
+| Compras y Proveedores | 92% | 88% | 90% |
+| Gestion Financiera | 72% | 65% | 68% |
+| WhatsApp | 15% | 0% | 7% |
+| Dashboard y Reportes | 92% | 90% | 91% |
+| Usuarios y Roles | 90% | 87% | 88% |
+| **TOTAL** | **~83%** | **~76%** | **~80%** |
 
-## Stack Tecnológico
+Ver `contexto/ESTADO_ACTUAL.md` para detalle completo por modulo.
 
-- **Backend:** Django 4.x + DRF + JWT + PostgreSQL
-- **Frontend:** React 19 + TypeScript + Tailwind + Vite
-- **Facturación:** Nubefact API
-- **Storage:** Cloudflare R2
-- **Async:** Celery + Redis
+## Lo que falta (resumen)
 
-## Autor
+**WhatsApp (7%):** Envio real HTTP a Meta (STUB), HMAC webhook, opt-in, campanas, toda la UI.
+**Facturacion FE:** Emision manual completa, vista previa PDF, resumen diario boletas.
+**Finanzas:** Conciliacion bancaria, PLE/PDT SUNAT, diferencia de cambio, indicador periodo.
+**Responsive/PWA:** Vista movil vendedor, vista conductor, Service Worker + IndexedDB.
 
-Desarrollado para J-Soluciones ERP
+## Stack
+
+| Capa | Tecnologia |
+|---|---|
+| Backend | Django 4.x + DRF + PostgreSQL 16 |
+| Async | Celery + Redis (3 colas) |
+| WebSocket | Django Channels + Daphne ASGI |
+| Storage | Cloudflare R2 |
+| Facturacion | Nubefact OSE via HTTP |
+| Frontend | React 19 + TypeScript + Vite + TanStack Query |
+| UI | Tailwind CSS 4 + Preline (Tailwick) |
+| API client | Orval (codegen desde OpenAPI) |
+
+## Repositorios
+
+| Repo | Descripcion |
+|---|---|
+| `Jsoluciones-be` | Django Backend (API REST) |
+| `Jsoluciones-fe` | React Frontend |
+| `Jsoluciones-docs` | Este repo — documentacion |

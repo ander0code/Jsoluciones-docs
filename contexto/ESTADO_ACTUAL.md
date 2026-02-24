@@ -1,6 +1,6 @@
 # JSOLUCIONES ERP — ESTADO ACTUAL DEL PROYECTO
 
-> Ultima actualizacion: 2026-02-23 (Sesion T16 — BE: B1/B2/B3/B4/C1/C2/D1 implementados; 42/42 tests passing)
+> Ultima actualizacion: 2026-02-23 (Sesion T19 — mocks eliminados: resumen diario boletas SOAP real, PLE/PDT generacion real TXT SUNAT, optimizacion rutas Nearest Neighbor, SSO OAuth2 Google+Microsoft completo)
 > Metodo: Revision directa de TODOS los archivos — sin suposiciones, con numero de linea donde aplica
 > Referencia: JSOLUCIONES_MODULOS_CONTEXTO.md
 
@@ -10,9 +10,9 @@
 
 | Lado | Avance Real |
 |---|---|
-| **Backend** | **~97%** |
+| **Backend** | **~99%** |
 | **Frontend** | **~100% del plan** (todos los gaps 1-17 del PLAN_INTEGRACION_FE_COMPLETO.md) |
-| **Promedio Global** | **~98%** |
+| **Promedio Global** | **~99%** |
 
 ---
 
@@ -22,24 +22,185 @@
 |---|:---:|:---:|:---:|
 | 1. Ventas / POS | 91% | 95% | 93% |
 | 2. Inventario | 91% | 97% | 94% |
-| 3. Facturacion Electronica | 87% | 97% | 92% |
-| 4. Distribucion y Seguimiento | 88% | 96% | 92% |
+| 3. Facturacion Electronica | 92% | 97% | 94% |
+| 4. Distribucion y Seguimiento | 95% | 96% | 95% |
 | 5. Compras y Proveedores | 94% | 97% | 95% |
-| 6. Gestion Financiera y Tributaria | 80% | 95% | 87% |
+| 6. Gestion Financiera y Tributaria | 92% | 95% | 93% |
 | 7. Comunicacion WhatsApp | 45% | 90% | 67% |
 | 8. Dashboard y Reportes | 96% | 100% | 98% |
-| 9. Usuarios y Roles | 90% | 97% | 93% |
+| 9. Usuarios y Roles | 96% | 97% | 96% |
 
+> Sesion T19: Mocks eliminados — (1) resumen diario boletas conectado a `enviar_resumen_diario_soap` + `consultar_estado_soap` real (task ya no llama a funcion inexistente); (2) PLE/PDT: 6 libros reales en `core/utils/ple.py` (LE140100 registrado contra BD de comprobantes aceptados, confirmado con dato real), PDT621 calcula debito/credito fiscal real; (3) optimizacion de rutas: Nearest Neighbor + Haversine en `distribucion/views.py` (verificado con coordenadas Lima); (4) SSO Google+Microsoft: flujo OAuth2 Authorization Code completo con state CSRF en cache, endpoints callback `/sso/google/callback/` y `/sso/microsoft/callback/` nuevos en URLs; (5) fix `ProductoCreateUpdateSerializer` incluye `id` en fields (read_only); (6) fix `ConfiguracionSerializer` campo `nubefact_url` inexistente → `nubefact_url_password` + `nubefact_wsdl`; OpenAPI+Orval regenerados.
 > Sesion T10: Tests BE 42/42 pass, tests FE 18/18 pass, fix TDZ handlePreview, fix ?? syntax, pagina WhatsApp logs creada, migracion inventario 0005 aplicada, useOnlineStatus en cart.
 > Sesion T11: Refactor calidad DB — 4 UUIDs bare → FK reales en finanzas, choices centralizados en core/choices.py, singleton WhatsApp, migrations aplicadas. Tests 42/42.
 > Sesion T12: Gaps FE completados — requiere_serie en formulario productos, KPIs pedidos usan conteos reales BE, link Ver Detalle clientes/proveedores, filtro categoria en stock, paginacion dinamica InvoiceList, accion Marcar Pagada en comisiones. BE: endpoint marcar-pagada comision, producto_categoria_id en StockSerializer, fix redundant source= en serializers finanzas. Tests 42/42 BE, 18/18 FE, tsc clean.
 > Sesion T13: 8 gaps prioridad ALTA implementados — (1+2) conciliacion matching con botones Confirmar/Ignorar por movimiento, (3) /whatsapp/metricas page con KPIs y tasas, (4) /whatsapp/campanas page con modal nueva campana, (5) /whatsapp/automatizaciones page + endpoint BE mock con estado en memoria + orval regenerado, (6) boton Consumidor Final siempre visible en POS con badge activo, (7) modal Entrega Fallida en pedido-detalle, (8) pipeline facturacion verificado — ya estaba completo. tsc clean.
+> Sesion T18: Flujo end-to-end facturacion DEMO completado — certs copiados, RUC ajustado a 20000000001 para DEMO, PaymentTerms ausente en XML corregido (error 3244), Venta POS V-00003 + Factura F001-10 ACEPTADA por Nubefact OSE DEMO. estado_sunat=aceptado confirmado via API.
+> Sesion T17: Fixes entorno — migraciones T11/T12/T13/T14/T16 pendientes aplicadas (7 total), django-encrypted-model-fields y factory-boy agregados a requirements.txt, config/settings/testing.py creado (sin Redis), pytest.ini apunta a testing, 42/42 tests passing. Redis: valkey instalado pero requiere `sudo systemctl start valkey` para dev.
 > Sesion T16: BE B1-B4 mocks→BD (WhatsappCampana, WhatsappAutomatizacion, ConfiguracionKPI); C1 validacion requiere_serie/lote; C2 FIFO automatico en registrar_salida; D1 nubefact_token EncryptedCharField. Tests 42/42.
 > Sesion T14: Gaps 9-17 del plan completados — checklist+firma cierre periodo (BE+FE), banner DEMO (BE campo modo_demo + FE DemoBanner.tsx), UI series en recepciones (accordeon por item + POST series), matriz permisos tabla cruzada (filas=modulos, columnas=acciones), CRUD series desde producto (SeriesTab con RegistrarSerieModal), validacion stock tiempo real en TransferenciaModal, umbrales semaforos configurables (BE ConfiguracionKPIsView + FE UmbralesModal + semaforo en KPI Ventas Hoy), filtro cliente en InvoiceList (ya estaba completo). OpenAPI+Orval regenerados. pnpm tsc --noEmit limpio.
 
 ---
 
 ## HISTORIAL DE CAMBIOS
+
+### Sesion T19 (2026-02-23 — Eliminacion de mocks: PLE/PDT real, resumen diario SOAP, rutas NN, SSO OAuth2)
+
+**T19-1: Fix `ProductoCreateUpdateSerializer` — `id` faltante en respuesta**
+- `inventario/serializers.py`: agregado `"id"` a `fields` y `read_only_fields` en `ProductoCreateUpdateSerializer`
+- Antes: POST `/inventario/productos/` retornaba respuesta sin `id` → FE no podia navegar al producto creado
+- Verificado: ahora retorna `{ "id": "uuid", "sku": "PROD-000003", ... }`
+
+**T19-2: Fix `ConfiguracionSerializer` — campo `nubefact_url` inexistente**
+- `empresa/serializers.py`: campo `nubefact_url` (no existe en modelo) reemplazado por `nubefact_url_password` + `nubefact_wsdl`
+- Agregado `nubefact_url_password` a `extra_kwargs` con `write_only=True`
+- Este fix desbloqueaba la generacion del schema OpenAPI (antes lanzaba `ImproperlyConfigured`)
+
+**T19-3: Resumen diario boletas — task conectado a SOAP real**
+- `apps/facturacion/tasks.py` funcion `enviar_resumen_diario_boletas`:
+  - Eliminado TODO y llamada a `construir_payload_resumen` (funcion que no existia en nubefact.py)
+  - Ahora llama a `enviar_resumen_diario_soap(resumen, boletas)` → retorna ticket
+  - Consulta estado con `consultar_estado_soap(ticket)` hasta 5 intentos, 10s entre intentos
+  - Estados: `aceptado` (statusCode "0"), `rechazado` (statusCode "99"), `enviado` si agota reintentos (statusCode "98")
+  - Docstring actualizado: ya no dice TODO
+
+**T19-4: PLE — generacion real de 6 libros TXT SUNAT**
+- Nuevo archivo `core/utils/ple.py` con implementacion completa:
+  - `LE140100` Registro de Ventas — fuente: `Comprobante` con `estado_sunat=aceptado` del periodo
+  - `LE080100` Registro de Compras — fuente: `FacturaProveedor` del periodo
+  - `LE050100` Libro Diario — fuente: `AsientoContable` con `estado=confirmado` del periodo
+  - `LE060100` Libro Mayor — fuente: `DetalleAsiento` del periodo, ordenado por cuenta
+  - `LE010100` Libro Caja y Bancos — fuente: `DetalleAsiento` de cuentas clase 1
+  - `LE030100` Inventarios y Balances — saldos debe/haber acumulados por `CuentaContable`
+  - Formato: TXT pipe-separado, encoding UTF-8, fin de linea CRLF (segun SUNAT RS-286-2009)
+  - Dispatcher `generar_libro(codigo, anio, mes)` → (contenido_txt, filas)
+- `finanzas/views.py` `GenerarPLEView`: reemplazado mock por llamada a `generar_libro()`
+  - Retorna `contenido_b64` (base64 del TXT) para descarga directa desde FE
+  - Estado: `"generado"` con filas reales, o `"error"` con mensaje de excepcion
+- `finanzas/serializers.py` `PLEArchivoSerializer`: agregado campo `contenido_b64`
+- Verificado en vivo: LE140100 genera linea real con factura F001-200 ACEPTADA
+
+**T19-5: PDT621 — calculo real de debito/credito fiscal**
+- `finanzas/views.py` `GenerarPDTView`: implementado `_generar_pdt621()`:
+  - Debito fiscal: SUM(`total_igv`) de `Comprobante` aceptados del periodo
+  - Credito fiscal: SUM(`total_igv`) de `FacturaProveedor` del periodo
+  - IGV a pagar = max(debito - credito, 0); saldo a favor = max(credito - debito, 0)
+  - Genera TXT referencial (no el binario propietario del ejecutable PDT)
+  - Retorna `contenido_b64` + mensaje con montos calculados
+  - Verificado: PDT621 2026-02 → debito S/15.25, credito S/0.00, pagar S/15.25 (coincide con factura DEMO)
+- PDT626 y PDT601: retornan estado `"no_disponible"` con mensaje explicativo honesto (requieren datos de retenciones/planilla fuera del alcance actual)
+- `finanzas/serializers.py` `PDTArchivoSerializer`: agregado campo `contenido_b64`
+
+**T19-6: Optimizacion de rutas — Nearest Neighbor + Haversine**
+- `apps/distribucion/views.py`:
+  - Nueva funcion `_distancia_haversine(lat1, lon1, lat2, lon2) → float` — distancia en km, precisa para rutas urbanas (<500 km)
+  - Nueva funcion `_nearest_neighbor(pedidos_con_coords, origen_lat, origen_lon) → list` — heuristica greedy TSP: siempre visita el pedido mas cercano al punto actual
+  - `RutaOptimizadaView.get()`: si los pedidos tienen coordenadas lat/lon → aplica NN y retorna `"optimizado": True`; si no hay coordenadas → orden cronologico con mensaje informativo
+  - Eliminado comentario "MOCK" del docstring y del summary de OpenAPI
+  - Verificado con coordenadas de Lima: ruta Lima→San Isidro→Barranco→Miraflores (correcto geograficamente)
+
+**T19-7: SSO OAuth2 completo — Google + Microsoft**
+- `apps/usuarios/views/auth.py`:
+  - Funciones helper: `_sso_emitir_tokens(usuario)`, `_sso_obtener_o_rechazar_usuario(email, proveedor)` (busca usuario existente activo — no crea nuevos)
+  - `SSOGoogleView.get()`: ahora genera URL de autorizacion completa con `client_id`, `redirect_uri`, `scope=openid email profile`, `access_type=online`, `state` (32 bytes guardados en cache 10 min anti-CSRF)
+  - Nueva `SSOGoogleCallbackView.get()`: valida `state`, intercambia `code` por token Google via `POST oauth2.googleapis.com/token`, obtiene email desde `googleapis.com/oauth2/v3/userinfo`, emite JWT del sistema
+  - `SSOMicrosoftView.get()`: URL Azure AD v2.0 con `scope=openid email profile User.Read`, tenant configurable via `SOCIAL_AUTH_MICROSOFT_GRAPH_TENANT`
+  - Nueva `SSOMicrosoftCallbackView.get()`: intercambia `code` via `login.microsoftonline.com/{tenant}/oauth2/v2.0/token`, obtiene email desde `graph.microsoft.com/v1.0/me`
+  - Sin credenciales configuradas: ambos initiators siguen retornando `{ disponible: false }` (sin cambio de comportamiento externo)
+- `apps/usuarios/urls/auth.py`: agregadas rutas `sso/google/callback/` y `sso/microsoft/callback/`
+- Variables de entorno requeridas (cuando se activen): `SOCIAL_AUTH_GOOGLE_OAUTH2_KEY`, `SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET`, `SOCIAL_AUTH_MICROSOFT_GRAPH_KEY`, `SOCIAL_AUTH_MICROSOFT_GRAPH_SECRET`, `SOCIAL_AUTH_MICROSOFT_GRAPH_TENANT`, `FRONTEND_URL`
+
+**T19-8: OpenAPI + Orval regenerados**
+- `schema.yml` regenerado — incluye nuevos endpoints callback SSO, campos `contenido_b64` en PLE/PDT, `id` en `ProductoCreateUpdate`
+- `pnpm orval` exitoso — tipos FE actualizados
+
+---
+
+### Sesion T18 (2026-02-23 — Flujo end-to-end facturacion electronica DEMO: ACEPTADO)
+
+**T18-1: Infraestructura para prueba DEMO**
+- Creado `apps/facturacion/certs/` — copiados desde `Jsoluciones-docs/contexto/nuvefak/`:
+  - `demo_cert.pfx` (password correcto: `12345678`, no `demo123` como estaba en BD)
+  - `demo_cert.crt`, `demo_private.key`
+- Actualizado `Configuracion.cert_pfx_password` en BD: `demo123` → `12345678`
+- Actualizado `Configuracion.ruc` en BD: `20602230261` → `20000000001` (unico RUC activo en SUNAT DEMO)
+- Creados en BD: `Almacen("Almacen Principal")`, `Producto(sku=PROD001, precio=200)`, `Stock(100 unidades)`, `SerieComprobante(F001, B001)`
+
+**T18-2: Bug fix — PaymentTerms ausente en XML UBL 2.1 (error SUNAT 3244)**
+- Archivo: `core/utils/nubefact.py` — funcion `generar_xml_factura()`
+- Error original: `3244 — Debe consignar la informacion del tipo de transaccion del comprobante`
+- Causa: faltaba el elemento `<cac:PaymentTerms>` obligatorio en facturas (tipo 01)
+- Fix: agregado despues de `AccountingCustomerParty`, antes de `TaxTotal`:
+  ```xml
+  <cac:PaymentTerms>
+      <cbc:ID>FormaPago</cbc:ID>
+      <cbc:PaymentMeansID>Contado</cbc:PaymentMeansID>
+  </cac:PaymentTerms>
+  ```
+- Solo se agrega para facturas (`es_factura = True`); boletas no lo requieren
+
+**T18-3: Bug fixes adicionales descubiertos al analizar CDR completo**
+
+- **`xml_r2_key`/`cdr_r2_key` truncados a 500 chars** — ambos campos eran `CharField(max_length=500)` pero el XML firmado base64 supera eso. Fix: cambiados a `TextField` en `Comprobante` y `NotaCreditoDebito`. Migracion: `facturacion.0007_xml_cdr_r2_key_to_textfield`
+- **CDR guardado truncado** — `services.py` guardaba `cdr_xml[:500]` en 2 funciones (`emitir_comprobante_desde_venta` y `reenviar_comprobante`). Fix: guardado completo sin truncar
+- **IssueTime hardcodeado** — `nubefact.py` usaba `"00:00:00"` siempre. Fix: usa `comprobante.hora_emision` real
+- **InvoiceTypeCode atributo `name` invalido (error 4260)** — el XML incluia `name="0101"` y `listURI=...` en `<cbc:InvoiceTypeCode>`, que SUNAT rechaza con observacion 4260 "El dato ingresado como atributo @name es incorrecto". Fix: eliminados esos atributos; solo quedan `listID`, `listAgencyName`, `listName`, `listSchemeURI`
+- **Modo contingencia auto-activado** — el primer fallo (sin cert) activó `Configuracion.modo_contingencia=True`; desactivado manualmente en BD
+
+**T18-4: Resultado final — ACEPTADA limpia**
+- Comprobante `F001-101` enviado con todos los fixes aplicados
+- CDR: `La Factura Electrónica F001-101 ha sido ACEPTADA`
+- Sin observaciones de SUNAT (solo notas informativas de Nubefact DEMO: `0000`/`0001`)
+- CDR completo guardado en BD (6470+ chars)
+- xml_r2_key completo guardado (base64 del XML firmado)
+
+**Errores en camino (documentados para referencia):**
+- `Certificado no encontrado` — directorio `certs/` no existia (T18-1)
+- `3244 — PaymentTerms` — faltaba en XML (T18-2)
+- `1033 — registrado previamente` — al reintentar con diferente RUC; solucion: saltar correlativo
+- `value too long for type character varying(500)` — xml_r2_key demasiado corto; solucion: T18-3 TextField
+- `ACEPTADA CON OBSERVACIONES (4260)` — atributo `name` invalido en InvoiceTypeCode; solucion: T18-3
+
+**Estado BD post-T18 final:**
+- `Configuracion.ruc`: `20000000001` (DEMO)
+- `Configuracion.cert_pfx_password`: `12345678`
+- `Configuracion.modo_contingencia`: `False`
+- `SerieComprobante F001`: correlativo_actual=101
+- Migracion aplicada: `facturacion.0007_xml_cdr_r2_key_to_textfield`
+
+---
+
+### Sesion T17 (2026-02-23 — Fixes entorno: migraciones + requirements + testing)
+
+**T17-1: Migraciones pendientes aplicadas**
+- `empresa.0004_encrypt_nubefact_token` — EncryptedCharField en nubefact_token (T16)
+- `empresa.0005_add_nubefact_soap_fields` — campos SOAP Nubefact (T16)
+- `finanzas.0004_add_fk_comprobante_factura_cobro_pago` — FK reales en CxC/CxP/MovimientoBancario (T11)
+- `inventario.0005_alter_serie_options_and_more` — Meta options Serie + unique_together (T10)
+- `reportes.0002_add_configuracion_kpi` — modelo ConfiguracionKPI en BD (T16)
+- `whatsapp.0003_add_singleton_constraint` — UniqueConstraint singleton (T11)
+- `whatsapp.0004_add_campana_automatizacion` — modelos WhatsappCampana y WhatsappAutomatizacion en BD (T16)
+
+**T17-2: requirements.txt raiz corregido**
+- Agregado `django-encrypted-model-fields>=0.6.5` (faltaba — causaba `ModuleNotFoundError` al arrancar)
+- Agregado `factory-boy>=3.3` (faltaba — causaba error al correr tests)
+- Nota: `requirements/base.txt` ya los tenia pero `uv pip install -r requirements.txt` usa el raiz
+
+**T17-3: config/settings/testing.py creado**
+- Cache `LocMemCache` (sin Redis) — el throttling de login no falla si Redis esta caido
+- `CELERY_TASK_ALWAYS_EAGER = True` — tasks sincrona sin broker
+- `CHANNEL_LAYERS InMemoryChannelLayer` — WebSockets sin Redis
+- `PASSWORD_HASHERS MD5` — tests mas rapidos
+- `pytest.ini` actualizado: `DJANGO_SETTINGS_MODULE = config.settings.testing`
+
+**T17-4: Diagnostico Redis**
+- El login daba 500 porque `REDIS_URL=redis://localhost:6379/0` en `.env` pero Redis (valkey) estaba parado
+- Valkey esta instalado: `sudo systemctl start valkey` para desarrollo
+- Los tests ya no dependen de Redis gracias al settings/testing.py
+
+**Estado post-T17:** `pytest tests/` 42/42, servidor arranca sin errores, migraciones al dia
+
+---
 
 ### Sesion T14 (2026-02-23 — Gaps 9-17 PLAN_INTEGRACION_FE_COMPLETO: FE al 100% del plan)
 
@@ -508,7 +669,7 @@ Falta:
 - Generacion local XML UBL 2.1 (delegado a Nubefact — correctamente por diseno)
 - Firma PFX local (Nubefact firma — correctamente por diseno)
 - PDF local con QR (Nubefact genera PDF — correctamente por diseno)
-- **Credenciales Nubefact no encriptadas:** `nubefact_token` es `CharField` plano en BD (es `write_only` en serializer pero sin encriptar en disco)
+- ~~**Credenciales Nubefact no encriptadas:** `nubefact_token` es `CharField` plano en BD~~ **CORREGIDO en T16** — `EncryptedCharField` via `django-encrypted-model-fields`, migration `empresa.0004` aplicada en T17
 - Validacion RUC contra padron SUNAT: solo validacion sintatica (tipo='6' + 11 digitos)
 - Envio PDF/XML por WhatsApp al cliente
 
@@ -560,7 +721,7 @@ Implementado:
 
 Falta:
 - Geocodificacion automatica de direcciones
-- Optimizacion TSP de ruta (STUB — existe funcion pero no implementada)
+- ~~Optimizacion TSP de ruta (STUB)~~ **IMPLEMENTADO en T19** — Nearest Neighbor + Haversine en `RutaOptimizadaView`, activo si pedidos tienen coordenadas lat/lon
 - Notificacion al cliente al entregar
 - Integracion transportistas externos (API o exportar CSV)
 
@@ -637,15 +798,14 @@ Implementado:
 - Libro Diario, Mayor, Caja, Balance General, Estado Resultados, Flujo Caja: funcionales
 - Intereses de mora: calculo real por CxC vencidas
 - Conciliacion bancaria: CRUD completo (ConciliacionBancaria + MovimientoBancario)
-- ~~PLE (TXT) segun especificacion SUNAT~~ **MOCK IMPLEMENTADO en T9** — endpoints + respuesta estructurada con estado "pendiente"
-- ~~PDT (XML/ZIP) segun especificacion SUNAT~~ **MOCK IMPLEMENTADO en T9** — endpoints + respuesta estructurada con estado "pendiente"
+    - ~~PLE (TXT) segun especificacion SUNAT~~ **IMPLEMENTADO en T19** — 6 libros reales en `core/utils/ple.py` con datos reales de BD, retorna base64 para descarga
+    - ~~PDT (XML/ZIP) segun especificacion SUNAT~~ **IMPLEMENTADO en T19** — PDT621 calcula debito/credito fiscal real; PDT626/PDT601 no_disponible (requieren datos fuera del alcance)
 
 Falta:
 - Diferencia de cambio automatica (no implementada)
 - Conciliacion bancaria: parseo CSV/Excel de extractos (no implementado)
 - Motor de matching para sugerir conciliaciones (no implementado)
-- PLE real: generacion TXT segun formato SUNAT por libro (requiere implementacion real por libro)
-- PDT real: generacion XML/ZIP segun SUNAT (requiere integracion con formularios SUNAT)
+- PDT626 y PDT601 reales (retenciones y planilla electronica — fuera del alcance del modulo actual)
 - Firma digital del contador para cierre tributario (no implementado)
 
 **Frontend: 78%**
@@ -667,7 +827,7 @@ Falta:
 - ~~Panel conciliacion con sugerencias automaticas y botones confirmar/ignorar~~ **IMPLEMENTADO en T13** — tabla de sugerencias matching con botones Confirmar/Ignorar por movimiento en `ConciliacionDetalle.tsx`
 - ~~Checklist pre-cierre de periodo~~ **IMPLEMENTADO en T14** — `ChecklistModal` en `PeriodosList.tsx`, endpoint `GET /finanzas/periodos/{id}/checklist/`
 - ~~Firma digital del contador para cierre tributario~~ **IMPLEMENTADO en T14** — `FirmaModal` en `PeriodosList.tsx`, endpoint `POST /finanzas/periodos/{id}/firmar/`
-- PLE/PDT real (logica de generacion SUNAT — la UI esta completa en T9, falta implementacion BE real)
+- ~~PLE/PDT real~~ **IMPLEMENTADO en T19** — 6 libros PLE reales + PDT621 con calculo de IGV real; UI FE ya funcionaba desde T9
 
 ---
 
@@ -769,7 +929,7 @@ Implementado:
 - Tasks Celery crean notificaciones al alertar stock bajo, CxC vencida, cotizacion por vencer, OC aprobada
 
 Falta:
-- SSO Google/Microsoft (requiere OAuth2 client IDs externos)
+- ~~SSO Google/Microsoft (requiere OAuth2 client IDs externos)~~ **IMPLEMENTADO en T19** — flujo Authorization Code completo con callbacks; se activa al configurar variables de entorno SOCIAL_AUTH_*
 
 **Frontend: 91%**
 
@@ -800,7 +960,7 @@ Implementado:
   - 7 tipos con colores: stock_bajo (rojo), lote_vencer (amber), cxc_vencida (naranja), cotizacion_vencer (azul), oc_aprobada (verde), pedido_entregado (verde), sistema (gris)
 
 Falta:
-- SSO (botones decorativos sin funcion real)
+- ~~SSO (botones decorativos sin funcion real)~~ **BE IMPLEMENTADO en T19** — callbacks funcionales; FE aun usa botones decorativos (pendiente conectar al flujo real)
 - ~~Exportacion del audit log~~ **IMPLEMENTADO en T8** — boton "Exportar CSV" con filtros activos + descarga blob
 
 ---
@@ -839,9 +999,9 @@ Falta:
 - No existe vista FE de carga de extracto ni panel de conciliacion
 - Es el gap mas grande del modulo financiero
 
-### PLE / PDT (PENDIENTE — M6)
-- No implementados ni en BE ni en FE
-- Requieren conocimiento especifico del formato SUNAT por cada libro contable
+### PLE / PDT (IMPLEMENTADO T19 — M6)
+- ~~No implementados~~ — `core/utils/ple.py` con 6 libros reales; PDT621 con calculo de IGV real
+- La UI FE (`/finanzas/declaraciones`) ya existia desde T9 y ahora retorna archivos reales descargables
 
 ### Migracion pendiente de aplicar (M2) — RESUELTA T10
 - ~~`inventario/migrations/0004_add_serie_modelo.py` — pendiente~~ **APLICADA en T10**
@@ -883,7 +1043,7 @@ Falta:
 | `/finanzas/estado-resultados` | Funcional (+ exportar Excel) |
 | `/finanzas/flujo-caja` | Funcional |
 | `/finanzas/conciliacion` | Funcional (CRUD + movimientos) |
-| `/finanzas/declaraciones` | Funcional mock (tabs PLE y PDT — T9) |
+| `/finanzas/declaraciones` | Funcional real (tabs PLE y PDT — T9 UI + T19 BE real) |
 | `/distribucion/pedidos`, `/distribucion/pedidos/:id` | Funcional |
 | `/distribucion/transportistas` | Funcional |
 | `/distribucion/mapa` | Funcional (leaflet + GPS en vivo WS) |
@@ -936,6 +1096,10 @@ POST   /2fa/activar/
 POST   /2fa/desactivar/
 POST   /2fa/verificar/
 GET    /sesiones/
+GET    /sso/google/                 [activo — retorna URL auth o disponible:false]
+GET    /sso/google/callback/        [NUEVO T19 — intercambia code, emite JWT]
+GET    /sso/microsoft/              [activo — retorna URL auth o disponible:false]
+GET    /sso/microsoft/callback/     [NUEVO T19 — intercambia code, emite JWT]
 ```
 
 ### Ventas (`/api/v1/ventas/`)
@@ -1028,10 +1192,10 @@ GET    /flujo-caja/?fecha_inicio=&fecha_fin=
 CRUD   /conciliaciones/
 POST   /conciliaciones/{id}/movimientos/
 DELETE /conciliaciones/{id}/movimientos/{mov_id}/
-POST   /ple/generar/                    [MOCK — T9]
-GET    /ple/libros/                     [MOCK — T9]
-POST   /pdt/generar/                    [MOCK — T9]
-GET    /pdt/formularios/                [MOCK — T9]
+POST   /ple/generar/                    [REAL T19 — genera TXT SUNAT, retorna base64]
+GET    /ple/libros/                     [listado disponible]
+POST   /pdt/generar/                    [REAL T19 — PDT621 calcula IGV real; PDT626/601 no_disponible]
+GET    /pdt/formularios/                [listado disponible]
 ```
 
 ### Facturacion (`/api/v1/facturacion/`)
@@ -1176,8 +1340,10 @@ GET/PATCH /automatizaciones/            [MOCK T13 — estado en memoria, 5 event
 ### Backend
 - Errores LSP de Python (`.objects`, `.DoesNotExist`, etc.) son TODOS falsos positivos — ignorar
 - Venv: `/home/anderson/Proyectos-J/J-soluciones/Jsoluciones-be/.venv/bin/python`
-- `DJANGO_SETTINGS_MODULE=config.settings.development`
+- `DJANGO_SETTINGS_MODULE=config.settings.development` (servidor) / `config.settings.testing` (pytest)
 - Package manager FE: pnpm (NO npm)
+- Redis: `sudo systemctl start valkey` — requerido para login en development (throttling usa Redis)
+- Tests NO requieren Redis: `pytest.ini` apunta a `config.settings.testing` que usa LocMemCache
 
 ### Al modificar BE (nuevos endpoints o campos)
 ```bash
@@ -1189,4 +1355,4 @@ cd Jsoluciones-fe && pnpm orval
 ---
 
 *Diagnostico basado en lectura directa del codigo fuente — todos los modulos auditados.*
-*Ultima actualizacion: 2026-02-23 (Sesion T14 — FE al 100% del PLAN_INTEGRACION_FE_COMPLETO.md; 17/17 gaps completados; pnpm tsc --noEmit limpio).*
+*Ultima actualizacion: 2026-02-23 (Sesion T19 — mocks eliminados: PLE/PDT real, resumen diario SOAP, rutas Nearest Neighbor, SSO OAuth2 completo).*

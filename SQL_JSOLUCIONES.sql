@@ -1758,3 +1758,122 @@ ALTER TABLE whatsapp_mensajes
 -- Corrección columnas whatsapp_plantillas
 ALTER TABLE whatsapp_plantillas
     ADD COLUMN IF NOT EXISTS idioma VARCHAR(10) NOT NULL DEFAULT 'es';
+
+
+-- ============================================================
+-- ACTUALIZACIONES POST-v3 CONTINUACIÓN (T12 — 2026-02-24)
+-- Sincronizado con modelos Django reales validados manualmente
+-- ============================================================
+
+
+-- ************************************************************
+-- [UPD-21] PEDIDOS: columnas faltantes (campos agregados en T6-T12)
+-- Fuente: distribucion/models.py — modelo Pedido
+-- El SQL v3 + UPD-3/4 no incluía estos campos del modelo real.
+-- ************************************************************
+
+ALTER TABLE pedidos
+    ADD COLUMN IF NOT EXISTS nombre_destinatario      VARCHAR(200) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS telefono_destinatario    VARCHAR(20)  NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS turno_entrega            VARCHAR(10)  NOT NULL DEFAULT '',
+    -- Valores: '' (sin turno) | 'manana' | 'tarde'
+    ADD COLUMN IF NOT EXISTS costo_delivery           DECIMAL(10,2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS enlace_ubicacion         VARCHAR(500) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS es_urgente               BOOLEAN      NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS fecha_pedido             DATE,
+    ADD COLUMN IF NOT EXISTS dedicatoria              TEXT         NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS foto_entrega             VARCHAR(200),          -- path del ImageField
+    ADD COLUMN IF NOT EXISTS observacion_conductor    TEXT         NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS fecha_confirmacion       TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS estado_produccion        VARCHAR(20)  NOT NULL DEFAULT 'pendiente',
+    -- Valores: 'pendiente' | 'en_produccion' | 'completado'
+    ADD COLUMN IF NOT EXISTS produccion_iniciada_en   TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS produccion_completada_en TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS creado_por_id            UUID         REFERENCES perfiles_usuario(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_pedidos_creado_por    ON pedidos(creado_por_id);
+CREATE INDEX IF NOT EXISTS idx_pedidos_estado_prod   ON pedidos(estado_produccion);
+CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_pedido  ON pedidos(fecha_pedido);
+
+
+-- ************************************************************
+-- [UPD-22] TRANSPORTISTAS: columnas GPS y portal conductor
+-- Fuente: distribucion/models.py — modelo Transportista
+-- El SQL v3 no incluía campos del portal conductor (token, GPS).
+-- ************************************************************
+
+ALTER TABLE transportistas
+    ADD COLUMN IF NOT EXISTS token         UUID         UNIQUE DEFAULT gen_random_uuid(),
+    ADD COLUMN IF NOT EXISTS last_lat      DECIMAL(10,7),
+    ADD COLUMN IF NOT EXISTS last_lng      DECIMAL(10,7),
+    ADD COLUMN IF NOT EXISTS last_location_at  TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS preferencia_zona  VARCHAR(200) NOT NULL DEFAULT '';
+
+-- Corregir ancho de placa (era VARCHAR(10), modelo usa max_length=20)
+-- No se puede ALTER directamente en PostgreSQL sin reconstruir; usar:
+-- ALTER TABLE transportistas ALTER COLUMN placa TYPE VARCHAR(20);
+ALTER TABLE transportistas ALTER COLUMN placa TYPE VARCHAR(20);
+
+CREATE INDEX IF NOT EXISTS idx_transportistas_token ON transportistas(token);
+
+
+-- ************************************************************
+-- [UPD-23] WHATSAPP: tablas campanas y automatizaciones
+-- Fuente: whatsapp/models.py — WhatsappCampana, WhatsappAutomatizacion
+-- No existían en el SQL v3.
+-- ************************************************************
+
+CREATE TABLE IF NOT EXISTS whatsapp_campanas (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre              VARCHAR(200)  NOT NULL,
+    plantilla_id        UUID          REFERENCES whatsapp_plantillas(id) ON DELETE SET NULL,
+    segmento            VARCHAR(100)  NOT NULL DEFAULT '',
+    estado              VARCHAR(20)   NOT NULL DEFAULT 'borrador',
+    -- Estados: borrador | programado | encolado | en_proceso | completado | cancelado
+    total_contactos     INTEGER       NOT NULL DEFAULT 0,
+    mensajes_encolados  INTEGER       NOT NULL DEFAULT 0,
+    programado_para     TIMESTAMPTZ,
+    creado_por_id       UUID          REFERENCES usuarios(id) ON DELETE SET NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campanas_estado      ON whatsapp_campanas(estado);
+CREATE INDEX IF NOT EXISTS idx_campanas_plantilla   ON whatsapp_campanas(plantilla_id);
+CREATE INDEX IF NOT EXISTS idx_campanas_creado_por  ON whatsapp_campanas(creado_por_id);
+
+
+CREATE TABLE IF NOT EXISTS whatsapp_automatizaciones (
+    id          VARCHAR(50)   PRIMARY KEY,     -- eg. 'auto-venta-confirmada' (PK string)
+    evento      VARCHAR(50)   NOT NULL UNIQUE,
+    -- Valores fijos: venta_confirmada | pedido_despachado | pedido_entregado |
+    --                cotizacion_por_vencer | cxc_vencida
+    plantilla_id UUID         REFERENCES whatsapp_plantillas(id) ON DELETE SET NULL,
+    activo      BOOLEAN       NOT NULL DEFAULT FALSE,
+    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Nota: se crean 5 filas fijas via migration post_migrate, una por evento.
+
+
+-- ************************************************************
+-- [UPD-24] CORRECCIÓN: whatsapp_log estructura real
+-- Fuente: whatsapp/models.py — WhatsappLog
+-- El SQL v3 tenía: mensaje_id FK, request_json, response_json, codigo_http
+-- El modelo Django real NO tiene FK a mensajes — es log de webhooks entrantes.
+-- ************************************************************
+
+-- La tabla whatsapp_log del SQL v3 está incorrecta. Estructura real:
+DROP TABLE IF EXISTS whatsapp_log;
+CREATE TABLE whatsapp_log (
+    id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    evento      VARCHAR(50)   NOT NULL DEFAULT '',   -- tipo de evento webhook
+    payload     JSONB         NOT NULL DEFAULT '{}', -- body del webhook
+    wa_message_id VARCHAR(100) NOT NULL DEFAULT '',  -- ID de Meta
+    procesado   BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_log_evento     ON whatsapp_log(evento);
+CREATE INDEX IF NOT EXISTS idx_wa_log_procesado  ON whatsapp_log(procesado);
+CREATE INDEX IF NOT EXISTS idx_wa_log_wa_msg_id  ON whatsapp_log(wa_message_id);

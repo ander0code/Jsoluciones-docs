@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<!-- saved from url=(0030)https://amatista.com/productos -->
+<html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="8R8mo4h9losO7dekJGP6Sff4qe8i4jDmoQ3qI2fX">
+    <title>Productos - Floreria</title>
+    <link href="./Productos - Floreria_files/bootstrap.min.css" rel="stylesheet">
+    <link href="./Productos - Floreria_files/bootstrap-icons.css" rel="stylesheet">
+        <style>
+        :root {
+            --rosa-principal: #e91e63;
+            --rosa-claro: #f8bbd9;
+            --rosa-oscuro: #c2185b;
+            --verde-hoja: #4caf50;
+            --verde-claro: #c8e6c9;
+            --crema: #fff8f0;
+        }
+
+        body {
+            background-color: var(--crema);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar-floreria {
+            background: linear-gradient(135deg, var(--rosa-principal) 0%, var(--rosa-oscuro) 100%);
+            box-shadow: 0 2px 10px rgba(233, 30, 99, 0.3);
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.3rem;
+        }
+
+        .navbar-brand i {
+            color: #fff;
+        }
+
+        .card {
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.08);
+            border: none;
+            border-radius: 12px;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--rosa-principal) 0%, var(--rosa-oscuro) 100%);
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            border: none;
+        }
+
+        .badge-pendiente {
+            background-color: #ff9800;
+            color: #fff;
+        }
+
+        .badge-en-ruta {
+            background-color: #2196f3;
+            color: #fff;
+        }
+
+        .badge-entregado {
+            background-color: var(--verde-hoja);
+            color: #fff;
+        }
+
+        .badge-no-entregado {
+            background-color: #f44336;
+            color: #fff;
+        }
+
+        .badge-reprogramado {
+            background-color: #00bcd4;
+            color: #fff;
+        }
+
+        .badge-cancelado {
+            background-color: #9e9e9e;
+            color: #fff;
+        }
+
+        .badge-prod-pendiente {
+            background-color: #ff9800;
+            color: #fff;
+        }
+
+        .badge-prod-armando {
+            background-color: #2196f3;
+            color: #fff;
+        }
+
+        .badge-prod-listo {
+            background-color: #4caf50;
+            color: #fff;
+        }
+
+        .btn-rosa {
+            background: linear-gradient(135deg, var(--rosa-principal) 0%, var(--rosa-oscuro) 100%);
+            border: none;
+            color: white;
+        }
+
+        .btn-rosa:hover {
+            background: linear-gradient(135deg, var(--rosa-oscuro) 0%, #ad1457 100%);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(233, 30, 99, 0.4);
+        }
+
+        .btn-verde {
+            background: linear-gradient(135deg, var(--verde-hoja) 0%, #388e3c 100%);
+            border: none;
+            color: white;
+        }
+
+        .btn-verde:hover {
+            background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline-rosa {
+            border: 2px solid var(--rosa-principal);
+            color: var(--rosa-principal);
+            background: transparent;
+        }
+
+        .btn-outline-rosa:hover {
+            background: var(--rosa-principal);
+            color: white;
+        }
+
+        .btn-ver {
+            background-color: #2196f3;
+            border: none;
+            color: white;
+        }
+
+        .btn-ver:hover {
+            background-color: #1976d2;
+            color: white;
+        }
+
+        .btn-editar {
+            background-color: #ff9800;
+            border: none;
+            color: white;
+        }
+
+        .btn-editar:hover {
+            background-color: #f57c00;
+            color: white;
+        }
+
+        .btn-pdf {
+            background-color: #9c27b0;
+            border: none;
+            color: white;
+        }
+
+        .btn-pdf:hover {
+            background-color: #7b1fa2;
+            color: white;
+        }
+
+        .btn-eliminar {
+            background-color: #f44336;
+            border: none;
+            color: white;
+        }
+
+        .btn-eliminar:hover {
+            background-color: #d32f2f;
+            color: white;
+        }
+
+        .table th {
+            background-color: var(--rosa-claro);
+            color: var(--rosa-oscuro);
+            font-weight: 600;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: rgba(233, 30, 99, 0.05);
+        }
+
+        .table-responsive {
+            overflow: visible !important;
+        }
+
+        .table {
+            overflow: visible;
+        }
+
+        .text-primary {
+            color: var(--rosa-principal) !important;
+        }
+
+        h5.text-primary i {
+            color: var(--rosa-oscuro);
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--rosa-principal);
+            box-shadow: 0 0 0 0.2rem rgba(233, 30, 99, 0.25);
+        }
+
+        .footer-floreria {
+            color: var(--rosa-oscuro);
+        }
+
+        .footer-floreria i {
+            color: var(--rosa-principal);
+        }
+
+        .alert-success {
+            background-color: var(--verde-claro);
+            border-color: var(--verde-hoja);
+            color: #2e7d32;
+        }
+
+        .navbar-floreria .nav-link {
+            color: rgba(255, 255, 255, 0.9);
+            transition: all 0.2s;
+        }
+
+        .navbar-floreria .nav-link:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .badge.bg-info {
+            background-color: #00bcd4 !important;
+        }
+
+        .dropdown-estado {
+            position: relative;
+        }
+
+        .dropdown-estado .dropdown-menu {
+            min-width: 130px;
+            padding: 0.25rem 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            z-index: 1050;
+        }
+
+        .dropdown-estado .dropdown-menu li {
+            margin: 0;
+            padding: 0;
+            display: block;
+        }
+
+        .dropdown-estado .dropdown-menu form {
+            margin: 0;
+            padding: 0;
+            display: block;
+        }
+
+        .dropdown-estado .dropdown-item {
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .dropdown-estado .dropdown-item i {
+            font-size: 0.9rem;
+        }
+
+        .dropdown-estado .badge.dropdown-toggle {
+            padding: 0.35em 0.5em;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .dropdown-estado .badge.dropdown-toggle::after {
+            margin-left: 0.25em;
+            vertical-align: middle;
+            font-size: 0.6rem;
+        }
+
+        .dropdown-distritos .dropdown-menu {
+            font-size: 0.85rem;
+        }
+
+        .dropdown-distritos .form-check {
+            padding: 0.15rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .dropdown-distritos .form-check-label {
+            cursor: pointer;
+        }
+
+        .dropdown-distritos .form-check-input {
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .card-header h4 {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-floreria mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="https://amatista.com/">
+                <i class="bi bi-flower1"></i> Amatista
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    
+                    <li class="nav-item">
+                        <a class="nav-link " href="https://amatista.com/">
+                            <i class="bi bi-journal-text"></i> Pedidos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link " href="https://amatista.com/nuevo">
+                            <i class="bi bi-plus-circle-fill"></i> Nuevo
+                        </a>
+                    </li>
+
+                                            <li class="nav-item">
+                            <a class="nav-link " href="https://amatista.com/produccion">
+                                <i class="bi bi-box-seam"></i> Produccion
+                            </a>
+                        </li>
+                    
+                                            
+                        <li class="nav-item">
+                            <a class="nav-link " href="https://amatista.com/mapa">
+                                <i class="bi bi-geo-alt-fill"></i> Mapa
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link " href="https://amatista.com/asignar">
+                                <i class="bi bi-signpost-split"></i> Asignar
+                            </a>
+                        </li>
+
+                        
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle active fw-bold" href="https://amatista.com/productos#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-gear-fill"></i> Gestión
+                            </a>
+                            <ul class="dropdown-menu border-0 shadow">
+                                <li><a class="dropdown-item" href="https://amatista.com/productos"><i class="bi bi-flower2 me-2"></i> Productos</a></li>
+                                <li><a class="dropdown-item" href="https://amatista.com/conductores"><i class="bi bi-truck me-2"></i> Conductores</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item" href="https://amatista.com/usuarios"><i class="bi bi-people-fill me-2"></i> Usuarios</a></li>
+                            </ul>
+                        </li>
+
+                        
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle " href="https://amatista.com/productos#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-bar-chart-fill"></i> Reportes
+                            </a>
+                            <ul class="dropdown-menu border-0 shadow">
+                                <li><a class="dropdown-item" href="https://amatista.com/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a></li>
+                                <li><a class="dropdown-item" href="https://amatista.com/vendedores/reporte"><i class="bi bi-graph-up me-2"></i> Rendimiento Vendedores</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item" href="https://amatista.com/auditoria"><i class="bi bi-shield-lock-fill me-2"></i> Auditoría</a></li>
+                            </ul>
+                        </li>
+                                    </ul>
+
+                
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="https://amatista.com/productos#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> Administrador
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
+                            <li>
+                                <a class="dropdown-item" href="https://amatista.com/cambiar-password">
+                                    <i class="bi bi-key-fill me-2"></i> Cambiar Clave
+                                </a>
+                            </li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <form method="POST" action="https://amatista.com/logout">
+                                    <input type="hidden" name="_token" value="8R8mo4h9losO7dekJGP6Sff4qe8i4jDmoQ3qI2fX" autocomplete="off">                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-box-arrow-right me-2"></i> Salir
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        
+        
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
+    <h2 class="mb-0"><i class="bi bi-flower2"></i> Productos</h2>
+    <div class="d-flex gap-2">
+        <a href="https://amatista.com/" class="btn btn-outline-rosa">
+            <i class="bi bi-arrow-left"></i> <span class="d-none d-sm-inline">Volver</span>
+        </a>
+        <a href="https://amatista.com/productos/nuevo" class="btn btn-rosa">
+            <i class="bi bi-plus-circle-fill"></i> Nuevo Producto
+        </a>
+    </div>
+</div>
+
+<div class="row">
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/o4MbbEO7OyTXKkgFtV4ge3VjMEWPYf6uF2kiU9Z9.jpg" class="card-img-top" alt="arreglo personalizado" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">arreglo personalizado</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 213.92</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/32/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/32/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/TVvVOXhaK7pHcpWqDjqq6o0H8fOZAZAeyks39quS.jpg" class="card-img-top" alt="bouquet 12 rosas pasion" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">bouquet 12 rosas pasion</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 99.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/6/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/6/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/E7iWeA86pVw2tOJs6GwGlpcddQ2LIViANCCKXngM.jpg" class="card-img-top" alt="bouquet 50 rosas rojas" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">bouquet 50 rosas rojas</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 179.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/4/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/4/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/fkvsSndpD4inrV1X5F9GKULag2EMzPYKv8OjlD3h.webp" class="card-img-top" alt="bouquet amor supremo" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">bouquet amor supremo</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 299.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/5/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/5/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/t7VfVVOEwkE4ymlGPn5OXsH7VfDJxDqtEy8148Mw.jpg" class="card-img-top" alt="box 50 rosas premiun" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">box 50 rosas premiun</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 299.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/3/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/3/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/vhNum9iowVArDcmmjzqYoQH3yCNu3RBKlO7EQifH.jpg" class="card-img-top" alt="box oso enamorado" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">box oso enamorado</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 229.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/9/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/9/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/Ty6Y6tfT7PVRwS6dcim0Q0xBhZAyUhROd6k75GAc.jpg" class="card-img-top" alt="box princess" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">box princess</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 109.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/11/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/11/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/5ZJs7GxDfXrD2CTm8YKjSrPBsSnrkdLtPzDs6mjk.jpg" class="card-img-top" alt="box princess red" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">box princess red</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 109.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/12/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/12/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/7eWw2xLqb2HrIUgjgJWgEPIvwvanyE9DVnnnOQcI.jpg" class="card-img-top" alt="caja de 12 rosas" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">caja de 12 rosas</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 70.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/31/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/31/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/fJdMyrdeNua44Dr9DgvlYd3CDeloss0POhqIfuNI.webp" class="card-img-top" alt="caja de tulipanes" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">caja de tulipanes</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 199.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/23/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/23/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/KLWJhSFjBYDf6aVX1o7zHUaUgySCdKgLWfsgvjqd.jpg" class="card-img-top" alt="cesta amor infinito" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">cesta amor infinito</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 499.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/8/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/8/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/UanZDSt7NGYY9BZTsxL3Y7FhfDgAWVTo2W5dSQg2.jpg" class="card-img-top" alt="chocolate ferrero roche" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">chocolate ferrero roche</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 36.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/19/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/19/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/OWPhfSJCBGMjfKKr9yIihJjecoRvVRYy42Mf7F37.jpg" class="card-img-top" alt="chocolate hershey rosado" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">chocolate hershey rosado</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 36.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/20/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/20/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/XPNHvWsaSYWYXJqlQy7kDEuQhBkj2PLPGxr9wPmW.jpg" class="card-img-top" alt="chocolate hersheys rojo" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">chocolate hersheys rojo</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 36.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/21/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/21/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/yesFPZEKCsFgIGjyc3U5t4oBGvfjj1HP8aan3Xbh.jpg" class="card-img-top" alt="dulce romance" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">dulce romance</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 305.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/17/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/17/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/fePr8K2PSUBlCOLCtUp4HlC9jeoPM1XmlxyqnBYA.jpg" class="card-img-top" alt="dulzura en burbuja" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">dulzura en burbuja</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 169.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/18/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/18/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/htgyMeo4x0PJhuzQhn4qNYlBJeSMmZMVmDtycaur.jpg" class="card-img-top" alt="encanto rojo" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">encanto rojo</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 260.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/2/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/2/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/kjqav9ASiCCMeq0fIYGVgIq2gWrv7xIjrT9ALxlq.jpg" class="card-img-top" alt="globo burbuja" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">globo burbuja</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 30.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/24/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/24/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/kHioMQHCjZP9IeS8Nz2VY2eM60oseAVfTmNuKl7V.jpg" class="card-img-top" alt="globo corona de amor" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">globo corona de amor</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 199.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/10/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/10/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/xdaPZ2j7hn2IzNRdyh8jYoTwl5nUlhDRBtawK9UN.jpg" class="card-img-top" alt="happy birthaday" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">happy birthaday</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 185.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/28/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/28/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/cJC5RnqcNCffYJOuIDPrs8petuni2FU0GWhiJceA.jpg" class="card-img-top" alt="jardin de emosiones" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">jardin de emosiones</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 199.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/29/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/29/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/gyvrJWHQzZp0nU2zrknMw3vK8NRxRKy9Z7z66TbU.jpg" class="card-img-top" alt="Juntos y felices" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">Juntos y felices</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 217.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/27/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/27/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/dovoAL56qz6lD8EzA5PeFfwKdG7easdqEnqjP0gE.jpg" class="card-img-top" alt="lleno de amor" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">lleno de amor</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 170.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/25/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/25/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/p8T9b0XJhBZSUFdDvasqAQlSGZpVy303EtWxMBdt.jpg" class="card-img-top" alt="lluvia de tulipanes" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">lluvia de tulipanes</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 279.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/13/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/13/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/SoW7tG0ngGzZaMxo9O8Dv03GJrbfgvqYKOiiiRmk.jpg" class="card-img-top" alt="locura de amor" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">locura de amor</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 269.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/26/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/26/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/utZQvyctJV3mOifvJOVGrTxbKJ6V30plSdERLuJo.jpg" class="card-img-top" alt="love in and box red princess" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">love in and box red princ...</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 119.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/22/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/22/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/g1kTnED1Wlaf3ta3lH7mAHs0CSUh6zZP7ENwZM2Y.jpg" class="card-img-top" alt="orquidea blanca" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">orquidea blanca</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 199.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/14/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/14/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/eOU1vroCZOLYv6rWJhMHVebDF5vkDIMSQzQvSdBO.jpg" class="card-img-top" alt="orquidea lila" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">orquidea lila</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 199.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/15/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/15/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/FjGzfxDINlOjpiNXChkEYF4TOkMtvSl6EW7bJvHG.jpg" class="card-img-top" alt="pasion eterna" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">pasion eterna</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 299.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/1/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/1/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/SwnaOQyVIqj9iUOGaSijGuZktXuVkCu3nV3x2gak.jpg" class="card-img-top" alt="ramo 10 tulipanes" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">ramo 10 tulipanes</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 165.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/16/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/16/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/WiWsS0QiUh8umBWM7CKNOkGmP2LE687yv9afbeK1.jpg" class="card-img-top" alt="ramo sol radiante" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">ramo sol radiante</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 169.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/7/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/7/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+        <div class="col-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 ">
+                        <img src="./Productos - Floreria_files/SQepzb7rmRWzFk5br1yN0I3VvkQ9rWTuhwlBHNow.jpg" class="card-img-top" alt="versos de amor" style="height: 160px; object-fit: cover;">
+                        <div class="card-body py-2">
+                <h6 class="card-title small mb-1">versos de amor</h6>
+                <p class="card-text mb-0">
+                    <span class="fs-5 fw-bold" style="color: var(--rosa-principal);">S/ 125.00</span>
+                </p>
+                            </div>
+            <div class="card-footer bg-transparent py-2">
+                <div class="btn-group btn-group-sm w-100">
+                    <a href="https://amatista.com/productos/30/editar" class="btn btn-editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+                    <a href="https://amatista.com/productos/30/eliminar" class="btn btn-eliminar">
+                        <i class="bi bi-trash-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+<div class="mt-3 text-muted">
+    <small><i class="bi bi-flower3"></i> Total: 32 producto(s)</small>
+</div>
+    </main>
+
+    <footer class="container mt-5 mb-3 text-center footer-floreria">
+        <small><i class="bi bi-flower3"></i> Amatista - Sistema de Entregas <i class="bi bi-flower3"></i></small>
+    </footer>
+
+    <script src="./Productos - Floreria_files/bootstrap.bundle.min.js"></script>
+    
+
+</body></html>

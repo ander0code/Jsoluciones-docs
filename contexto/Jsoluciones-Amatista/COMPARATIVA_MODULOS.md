@@ -1,6 +1,6 @@
 # COMPARATIVA: JSoluciones POS vs Laravel-Amatista
 
-> Fecha: 2026-02-21
+> Fecha: 2026-02-25 (actualizado con análisis completo — revisión total de controllers, services, exports, PDFs, enums, vistas)
 > Metodo: Revision archivo por archivo de ambos proyectos (modelos, servicios, controladores, rutas, enums, vistas)
 > Objetivo: Identificar que funcionalidades de Amatista ya cubre JSoluciones, que falta, y como seria la migracion
 
@@ -20,11 +20,15 @@
 
 ### Veredicto
 
-**JSoluciones es significativamente mas completo** que Amatista en casi todas las areas. Amatista tiene exactamente **3 funcionalidades** que JSoluciones no tiene aun o tiene implementadas de forma diferente:
+**JSoluciones es significativamente mas completo** que Amatista en casi todas las areas. Amatista tiene exactamente **5 funcionalidades** que JSoluciones no tiene aun o tiene implementadas de forma diferente:
 
-1. **Portal del conductor** (acceso por token sin login, confirmacion con foto)
-2. **Modulo de produccion** (flujo pendiente → armando → listo con urgencias)
-3. **Mapa de entregas** (visualizacion por distrito con coordenadas de conductores)
+1. **Export Excel funcional** (descarga pedidos por semana/mes — el más usado día a día)
+2. **PDF de entrega + PDF interno** (documentos de paquete y administrativo)
+3. **PDF → imagen PNG/JPG** (para compartir por WhatsApp)
+4. **Portal del conductor** (acceso por token sin login, confirmacion con foto)
+5. **Modulo de produccion** (flujo pendiente → armando → listo con urgencias)
+
+El export Excel y los PDFs son los más críticos para el negocio operativo (se usan a diario).
 
 Todo lo demas que hace Amatista ya lo cubre JSoluciones con mayor profundidad.
 
@@ -44,7 +48,10 @@ Todo lo demas que hace Amatista ya lo cubre JSoluciones con mayor profundidad.
 | Produccion | **No existe en JSoluciones** | ❌ Sin equivalente |
 | Portal del conductor | Modulo 4: Distribucion | ❌ No implementado |
 | Mapa de entregas | Modulo 4: Distribucion | ❌ No implementado |
-| Excel export | Modulo 8: Dashboard (STUB) | ❌ Sin logica real |
+| Excel export pedidos | Modulo 8: Dashboard (STUB) | ❌ Sin logica real (falta openpyxl) |
+| PDF de entrega (paquete 15.5x21cm) | Distribucion / pedidos | ❌ No existe (falta WeasyPrint) |
+| PDF interno A4 (admin) | Distribucion / pedidos | ❌ No existe |
+| PDF → imagen PNG/JPG (WhatsApp) | Distribucion / pedidos | ❌ No existe (falta Ghostscript) |
 
 ---
 
@@ -392,3 +399,115 @@ JSOLUCIONES:
 - [ ] UI de auditoria con filtros
 - [ ] Hacer registros verdaderamente inmutables (bloquear update/delete)
 - [ ] Registrar intentos de acceso denegado
+
+---
+
+## DATOS REALES DE AMATISTA EN PRODUCCION (contexto negocio)
+
+### Metodos de pago usados (Enum MetodoPago de Amatista)
+| Value | Label |
+|---|---|
+| `yape` | Yape |
+| `plin` | Plin |
+| `efectivo` | Efectivo |
+| `izipay` | Izipay |
+| `payum` | Payum |
+| `bcp` | Tarjeta BCP |
+| `interbank` | Tarjeta Interbank |
+| `bbva` | Tarjeta BBVA |
+| `scotiabank` | Tarjeta Scotiabank |
+| `bn` | Tarjeta Banco de la Nacion |
+| `otro` | Otro |
+
+**Mas usados en la operacion real:** Yape, Plin, Izipay, Efectivo, Tarjeta BCP
+
+### Turnos de entrega (Enum Turno)
+| Value | Label |
+|---|---|
+| `manana` | Mañana (8:00 AM - 2:00 PM) |
+| `tarde` | Tarde (2:00 PM - 10:00 PM) |
+
+### Estados de entrega (Enum Estado)
+| Value | Label | Transiciones |
+|---|---|---|
+| `pendiente` | Pendiente | → cualquier estado |
+| `en_ruta` | En Ruta | → cualquier estado |
+| `entregado` | Entregado | estado final |
+| `no_entregado` | No Entregado | estado final |
+| `reprogramado` | Reprogramado | → cualquier estado |
+| `cancelado` | Cancelado | estado final |
+
+**Nota:** En Amatista las transiciones son LIBRES (admin puede cambiar a cualquier estado). JSoluciones las valida estrictamente.
+
+### Estados de produccion (Enum EstadoProduccion)
+| Value | Label | Transiciones permitidas |
+|---|---|---|
+| `pendiente` | Pendiente | → armando |
+| `armando` | Armando | → listo |
+| `listo` | Listo | → armando (reversion) |
+
+### Tipos de ubicacion (Enum TipoUbicacion)
+- `casa` → Casa
+- `oficina` → Oficina
+- (otros valores posibles segun codigo)
+
+### Distritos de Lima (50 distritos en Enum Distrito)
+Amatista tiene los 50 distritos de Lima Metropolitana + Callao configurados con coordenadas GPS en `DistritoCoordinates` helper.
+**Mas frecuentes en operacion:** Miraflores, San Isidro, Santiago de Surco, La Molina, San Borja, Barranco, Surquillo, San Miguel, Pueblo Libre, Lince.
+
+---
+
+## DETALLE DE LA LISTA DE PEDIDOS DE AMATISTA
+
+La pantalla principal de Amatista (`/` — `reportes.index`) tiene:
+
+### Filtros disponibles (9 filtros simultáneos):
+1. **Estado** — dropdown con todos los estados
+2. **Fecha** — date picker
+3. **Distritos** — multi-select con checkbox, "Marcar/Desmarcar todos"
+4. **Turno** — Mañana / Tarde
+5. **Tipo ubicación** — Casa / Oficina
+6. **Método de pago** — todos los métodos
+7. **Buscar cliente** — texto libre
+8. **Buscar destinatario** — texto libre
+9. **Producto** — select con todos los productos activos
+10. **Conductor** — select (incluye "Sin asignar")
+11. **Estado de producción** — dropdown
+
+### Filtros persistidos en sesión:
+Los filtros se guardan en la sesión y se restauran al volver a la lista.
+
+### Auto-refresh:
+La lista se actualiza automáticamente cada 60 segundos si el usuario no interactúa por 30+ segundos.
+
+### Resumen de productos (cuando hay filtros activos):
+- Cards con imagen del producto + badge de cantidad total
+- Muestra progreso `cantidad_lista / total_cantidad` (pedidos listos de producción vs total)
+
+### Acciones por pedido (desde la lista, sin entrar al detalle):
+- Ver detalle
+- Editar
+- Cambiar estado (dropdown en la propia lista, solo admin)
+- Descargar PDF entrega
+- Descargar PDF entrega como PNG
+- Descargar PDF entrega como JPG
+- Descargar PDF interno
+- Descargar PDF interno como PNG
+- Descargar PDF interno como JPG
+
+### Paginación: 50 pedidos por página con query string persistido.
+
+---
+
+## UI DE LA LISTA EN JSOLUCIONES vs AMATISTA
+
+| Caracteristica | Amatista | JSoluciones |
+|---|---|---|
+| Filtros avanzados | 11 filtros simultaneos | Busqueda y estado basico |
+| Persistencia de filtros | ✅ En sesion | ❌ No |
+| Auto-refresh | ✅ 60s si inactivo | ❌ No |
+| Resumen de productos | ✅ Con imagen y progreso | ❌ No |
+| Cambio de estado desde lista | ✅ Dropdown por fila | ❌ Solo desde detalle |
+| PDF/imagen desde lista | ✅ Dropdown con 6 opciones | ❌ No |
+| Vista responsive | ✅ Tabla desktop + cards mobile | ⚠️ Solo tabla |
+| Paginacion | ✅ 50/pagina | ✅ Cursor pagination |

@@ -1,6 +1,19 @@
 -- ============================================================
--- JSOLUCIONES ERP — SQL Completo v3
--- PostgreSQL 16 | UUID nativo | ENUMs nativos | 47 tablas | 104 índices
+-- JSOLUCIONES ERP — SQL Completo v4
+-- PostgreSQL 16 | UUID nativo | ENUMs nativos | 65 tablas | 130+ índices
+-- Sincronizado con Django migrations: Amatista-BE v2025-02-26
+-- ============================================================
+-- CAMBIOS PRINCIPALES:
+--   ✓ Usuarios: TOTP 2FA, sesiones_activas, notificaciones
+--   ✓ Empresa: Encriptación Fernet (credenciales), WSDL SOAP, cert .pfx
+--   ✓ Inventario: series (control de serialización), ubicaciones, transferencias
+--   ✓ Compras: gastos_logisticos, evaluaciones_proveedor
+--   ✓ Ventas: estado_produccion (kanban), cajas, comisiones_vendedor
+--   ✓ Facturación: R2 keys (PDF/XML/CDR), resumen_diario_sunat
+--   ✓ Finanzas: períodos_contables, conciliaciones_bancarias
+--   ✓ Distribución: GPS tracking, código_seguimiento, estado_producción
+--   ✓ Reportes: snapshots_kpi, programaciones_reporte
+--   ✓ WhatsApp: singleton config, campañas, automatizaciones
 -- ============================================================
 --
 -- REGLAS APLICADAS (03_REGLAS_BASE_DATOS.md):
@@ -186,25 +199,35 @@ CREATE TYPE enum_estado_resumen_diario AS ENUM (
 -- ************************************************************
 
 CREATE TABLE configuracion (
-    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    ruc             VARCHAR(11)   NOT NULL UNIQUE,
-    razon_social    VARCHAR(200)  NOT NULL,
-    nombre_comercial VARCHAR(200) NOT NULL DEFAULT '',
-    direccion       TEXT          NOT NULL DEFAULT '',
-    ubigeo          VARCHAR(6)    NOT NULL DEFAULT '',
-    departamento    VARCHAR(50)   NOT NULL DEFAULT '',
-    provincia       VARCHAR(50)   NOT NULL DEFAULT '',
-    distrito        VARCHAR(50)   NOT NULL DEFAULT '',
-    telefono        VARCHAR(20)   NOT NULL DEFAULT '',
-    email           VARCHAR(254)  NOT NULL DEFAULT '',
-    logo            VARCHAR(200),
-    nubefact_token  VARCHAR(200)  NOT NULL DEFAULT '',
-    nubefact_url    VARCHAR(500)  NOT NULL DEFAULT 'https://api.nubefact.com/api/v1/',
-    -- WhatsApp: credenciales viven en whatsapp_configuracion (tabla dedicada)
-    moneda_principal enum_moneda  NOT NULL DEFAULT 'PEN',
-    igv_porcentaje  DECIMAL(5,2)  NOT NULL DEFAULT 18.00,
-    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    ruc                         VARCHAR(11)   NOT NULL UNIQUE,
+    razon_social                VARCHAR(200)  NOT NULL,
+    nombre_comercial            VARCHAR(200)  NOT NULL DEFAULT '',
+    direccion                   TEXT          NOT NULL DEFAULT '',
+    ubigeo                      VARCHAR(6)    NOT NULL DEFAULT '',
+    departamento                VARCHAR(50)   NOT NULL DEFAULT '',
+    provincia                   VARCHAR(50)   NOT NULL DEFAULT '',
+    distrito                    VARCHAR(50)   NOT NULL DEFAULT '',
+    telefono                    VARCHAR(20)   NOT NULL DEFAULT '',
+    email                       VARCHAR(254)  NOT NULL DEFAULT '',
+    logo                        VARCHAR(200),
+    logo_media_id               UUID          REFERENCES media_archivos(id) ON DELETE SET_NULL,
+    -- Nubefact: Encriptado con Fernet (no almacenar en texto plano)
+    nubefact_token              VARCHAR(200)  NOT NULL DEFAULT '',
+    nubefact_url_password       VARCHAR(200)  NOT NULL DEFAULT '',
+    nubefact_wsdl               VARCHAR(500)  NOT NULL DEFAULT 'https://api.nubefact.com/api/v1/',
+    -- Certificado .pfx para firma digital (encriptado)
+    cert_pfx_path               VARCHAR(500)  NOT NULL DEFAULT '',
+    cert_pfx_password           VARCHAR(200)  NOT NULL DEFAULT '',
+    -- Modo contingencia (emisión offline)
+    modo_contingencia           BOOLEAN       NOT NULL DEFAULT FALSE,
+    contingencia_activada_at    TIMESTAMPTZ,
+    moneda_principal            enum_moneda   NOT NULL DEFAULT 'PEN',
+    igv_porcentaje              DECIMAL(5,2)  NOT NULL DEFAULT 18.00,
+    singleton                   BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(singleton)
 );
 
 
@@ -255,25 +278,64 @@ CREATE TABLE rol_permisos (
 );
 
 CREATE TABLE perfiles_usuario (
-    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    usuario_id      UUID          NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
-    rol_id          UUID          NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-    telefono        VARCHAR(20)   NOT NULL DEFAULT '',
-    avatar          VARCHAR(200),
-    is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id              UUID          NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+    rol_id                  UUID          NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+    telefono                VARCHAR(20)   NOT NULL DEFAULT '',
+    avatar                  VARCHAR(200),
+    is_active               BOOLEAN       NOT NULL DEFAULT TRUE,
+    password_changed_at     TIMESTAMPTZ,
+    totp_secret             VARCHAR(64)   NOT NULL DEFAULT '',
+    totp_enabled            BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_perfiles_usuario_rol ON perfiles_usuario(rol_id);
 
 CREATE TABLE log_actividad (
     id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    usuario_id      UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    usuario_id      UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
     accion          VARCHAR(50)   NOT NULL,
     modulo          VARCHAR(30)   NOT NULL DEFAULT '',
     detalle         TEXT          NOT NULL DEFAULT '',
     ip_address      VARCHAR(45)   NOT NULL DEFAULT '',
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_log_actividad_usuario ON log_actividad(usuario_id);
+CREATE INDEX idx_log_actividad_modulo_fecha ON log_actividad(modulo, created_at);
+CREATE INDEX idx_log_actividad_fecha ON log_actividad(created_at);
+
+-- Sesiones activas (JWT tracking)
+CREATE TABLE sesiones_activas (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id      UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE CASCADE,
+    jti             VARCHAR(64)   NOT NULL UNIQUE,
+    ip_address      VARCHAR(45)   NOT NULL DEFAULT '',
+    user_agent      VARCHAR(300)  NOT NULL DEFAULT '',
+    activo          BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ   NOT NULL
+);
+
+CREATE INDEX idx_sesiones_activas_usuario_activo ON sesiones_activas(usuario_id, activo);
+
+-- Notificaciones del sistema
+CREATE TABLE notificaciones (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario_id      UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE CASCADE,
+    tipo            VARCHAR(30)   NOT NULL,
+    titulo          VARCHAR(200)  NOT NULL,
+    mensaje         TEXT          NOT NULL,
+    leida           BOOLEAN       NOT NULL DEFAULT FALSE,
+    referencia_tipo VARCHAR(50)   NOT NULL DEFAULT '',
+    referencia_id   UUID,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notificaciones_usuario_leida ON notificaciones(usuario_id, leida);
+CREATE INDEX idx_notificaciones_usuario_fecha ON notificaciones(usuario_id, created_at);
 
 
 -- ************************************************************
@@ -345,7 +407,7 @@ CREATE TABLE productos (
     nombre                VARCHAR(200)  NOT NULL,
     descripcion           TEXT          NOT NULL DEFAULT '',
     codigo_barras         VARCHAR(50)   NOT NULL DEFAULT '',
-    categoria_id          UUID          REFERENCES categorias(id) ON DELETE SET NULL,
+    categoria_id          UUID          REFERENCES categorias(id) ON DELETE SET_NULL,
     unidad_medida         enum_unidad_medida NOT NULL DEFAULT 'NIU',
     precio_compra         DECIMAL(12,4) NOT NULL DEFAULT 0,
     precio_venta          DECIMAL(12,4) NOT NULL,
@@ -353,11 +415,12 @@ CREATE TABLE productos (
     stock_minimo          DECIMAL(12,2) NOT NULL DEFAULT 0,
     stock_maximo          DECIMAL(12,2) NOT NULL DEFAULT 0,
     requiere_lote         BOOLEAN       NOT NULL DEFAULT FALSE,
+    requiere_serie        BOOLEAN       NOT NULL DEFAULT FALSE,
     is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
-    actualizado_por_id    UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL
+    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    actualizado_por_id    UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL
 );
 
 CREATE INDEX idx_productos_sku ON productos(sku);
@@ -387,6 +450,27 @@ CREATE TABLE lotes (
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_lotes_producto_almacen ON lotes(producto_id, almacen_id);
+CREATE INDEX idx_lotes_fecha_vencimiento ON lotes(fecha_vencimiento);
+
+-- Números de serie (para productos que requieren serialización)
+CREATE TABLE series (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    producto_id     UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
+    numero_serie    VARCHAR(100)  NOT NULL,
+    estado          VARCHAR(20)   NOT NULL DEFAULT 'DISPONIBLE',
+    almacen_id      UUID          REFERENCES almacenes(id) ON DELETE SET_NULL,
+    referencia_tipo VARCHAR(30)   NOT NULL DEFAULT '',
+    referencia_id   UUID,
+    observaciones   TEXT          NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(producto_id, numero_serie)
+);
+
+CREATE INDEX idx_series_numero_serie ON series(numero_serie);
+CREATE INDEX idx_series_producto_estado ON series(producto_id, estado);
 
 CREATE TABLE stock (
     id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -571,21 +655,25 @@ CREATE INDEX idx_ventas_vendedor_fecha ON ventas(vendedor_id, fecha);
 CREATE INDEX idx_ventas_estado_fecha ON ventas(estado, fecha);
 
 CREATE TABLE detalle_ventas (
-    id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    venta_id              UUID          NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
-    producto_id           UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
-    cantidad              DECIMAL(12,2) NOT NULL,
-    precio_unitario       DECIMAL(12,4) NOT NULL,
-    descuento_porcentaje  DECIMAL(5,2)  NOT NULL DEFAULT 0,
-    subtotal              DECIMAL(12,2) NOT NULL,
-    igv                   DECIMAL(12,2) NOT NULL,
-    total                 DECIMAL(12,2) NOT NULL,
-    lote_id               UUID          REFERENCES lotes(id) ON DELETE SET NULL,
-    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    venta_id                    UUID          NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+    producto_id                 UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
+    cantidad                    DECIMAL(12,2) NOT NULL,
+    precio_unitario             DECIMAL(12,4) NOT NULL,
+    descuento_porcentaje        DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    subtotal                    DECIMAL(12,2) NOT NULL,
+    igv                         DECIMAL(12,2) NOT NULL,
+    total                       DECIMAL(12,2) NOT NULL,
+    lote_id                     UUID          REFERENCES lotes(id) ON DELETE SET_NULL,
+    estado_produccion           VARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE',
+    produccion_iniciada_en      TIMESTAMPTZ,
+    produccion_completada_en    TIMESTAMPTZ,
+    created_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_dv_venta_producto ON detalle_ventas(venta_id, producto_id);
+CREATE INDEX idx_dv_estado_produccion ON detalle_ventas(estado_produccion);
 
 -- Cajas POS
 CREATE TABLE cajas (
@@ -621,6 +709,23 @@ CREATE TABLE formas_pago (
 
 CREATE INDEX idx_formas_pago_venta ON formas_pago(venta_id);
 
+-- Comisiones de vendedores
+CREATE TABLE comisiones_vendedor (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendedor_id         UUID          NOT NULL REFERENCES perfiles_usuario(id) ON DELETE RESTRICT,
+    periodo             VARCHAR(7)    NOT NULL,
+    porcentaje          DECIMAL(5,2)  NOT NULL DEFAULT 5,
+    total_ventas        DECIMAL(14,2) NOT NULL DEFAULT 0,
+    monto_comision      DECIMAL(14,2) NOT NULL DEFAULT 0,
+    cantidad_ventas     INTEGER       NOT NULL DEFAULT 0,
+    pagado              BOOLEAN       NOT NULL DEFAULT FALSE,
+    fecha_pago          DATE,
+    notas               TEXT          NOT NULL DEFAULT '',
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(vendedor_id, periodo)
+);
+
 
 -- ************************************************************
 -- 7. FACTURACIÓN ELECTRÓNICA (5 tablas + resumen_diario)
@@ -652,18 +757,18 @@ CREATE TABLE comprobantes (
     total_igv           DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_venta         DECIMAL(12,2) NOT NULL DEFAULT 0,
     estado_sunat        enum_estado_comprobante NOT NULL DEFAULT 'pendiente',
-    pdf_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del PDF (no URL directa — via presigned URL)
-    xml_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del XML UBL
-    cdr_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del CDR SUNAT
+    pdf_r2_key          VARCHAR(500)  NOT NULL DEFAULT '',
+    xml_r2_key          TEXT          NOT NULL DEFAULT '',
+    cdr_r2_key          TEXT          NOT NULL DEFAULT '',
     hash_sunat          TEXT          NOT NULL DEFAULT '',
     qr_sunat            TEXT          NOT NULL DEFAULT '',
     nubefact_request    JSONB,
     nubefact_response   JSONB,
     modo_emision        enum_modo_emision NOT NULL DEFAULT 'normal',
-    venta_id            UUID          REFERENCES ventas(id) ON DELETE SET NULL,
+    venta_id            UUID          REFERENCES ventas(id) ON DELETE SET_NULL,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    creado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    creado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
     UNIQUE(tipo_comprobante, serie, numero)
 );
 
@@ -698,22 +803,21 @@ CREATE TABLE notas_credito_debito (
     serie                 VARCHAR(4)    NOT NULL,
     numero                INTEGER       NOT NULL,
     fecha_emision         DATE          NOT NULL,
-    motivo_codigo_nc      enum_motivo_nota_credito,  -- solo si tipo_nota = '07'
-    motivo_codigo_nd      enum_motivo_nota_debito,   -- solo si tipo_nota = '08'
+    motivo_codigo_nc      enum_motivo_nota_credito,
+    motivo_codigo_nd      enum_motivo_nota_debito,
     motivo_descripcion    TEXT          NOT NULL DEFAULT '',
     total_gravada         DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_igv             DECIMAL(12,2) NOT NULL DEFAULT 0,
     total                 DECIMAL(12,2) NOT NULL DEFAULT 0,
     estado_sunat          enum_estado_comprobante NOT NULL DEFAULT 'pendiente',
-    pdf_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del PDF
-    xml_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del XML
-    cdr_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',  -- R2 key del CDR
+    pdf_r2_key            VARCHAR(500)  NOT NULL DEFAULT '',
+    xml_r2_key            TEXT          NOT NULL DEFAULT '',
+    cdr_r2_key            TEXT          NOT NULL DEFAULT '',
     nubefact_request      JSONB,
     nubefact_response     JSONB,
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
-    -- CHECK: exactamente uno de los dos motivos debe estar presente
+    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
     CONSTRAINT chk_motivo_nota CHECK (
         (tipo_nota = '07' AND motivo_codigo_nc IS NOT NULL AND motivo_codigo_nd IS NULL)
         OR
@@ -763,22 +867,23 @@ CREATE INDEX idx_resumen_fecha_estado ON resumen_diario(fecha_resumen, estado);
 
 CREATE TABLE ordenes_compra (
     id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    numero                VARCHAR(20)   NOT NULL,
+    numero                VARCHAR(20)   NOT NULL UNIQUE,
     fecha                 DATE          NOT NULL,
     fecha_estimada_entrega DATE,
     proveedor_id          UUID          NOT NULL REFERENCES proveedores(id) ON DELETE RESTRICT,
     estado                enum_estado_orden_compra NOT NULL DEFAULT 'borrador',
-    almacen_destino_id    UUID          REFERENCES almacenes(id) ON DELETE SET NULL,
+    almacen_destino_id    UUID          NOT NULL REFERENCES almacenes(id) ON DELETE RESTRICT,
     moneda                enum_moneda   NOT NULL DEFAULT 'PEN',
     total_base            DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_igv             DECIMAL(12,2) NOT NULL DEFAULT 0,
+    gastos_logisticos     DECIMAL(12,2) NOT NULL DEFAULT 0,
     total                 DECIMAL(12,2) NOT NULL DEFAULT 0,
     notas                 TEXT          NOT NULL DEFAULT '',
-    aprobado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    aprobado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
     is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET NULL
+    creado_por_id         UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL
 );
 
 CREATE TABLE detalle_ordenes_compra (
@@ -805,10 +910,12 @@ CREATE TABLE facturas_proveedor (
     total_base          DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_igv           DECIMAL(12,2) NOT NULL DEFAULT 0,
     total               DECIMAL(12,2) NOT NULL DEFAULT 0,
-    orden_compra_id     UUID          REFERENCES ordenes_compra(id) ON DELETE SET NULL,
+    orden_compra_id     UUID          REFERENCES ordenes_compra(id) ON DELETE SET_NULL,
     estado              enum_estado_factura_proveedor NOT NULL DEFAULT 'registrada',
+    is_active           BOOLEAN       NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(numero_factura, proveedor_id) WHERE is_active = TRUE
 );
 
 CREATE TABLE recepciones (
@@ -829,10 +936,28 @@ CREATE TABLE detalle_recepciones (
     detalle_orden_compra_id  UUID          NOT NULL REFERENCES detalle_ordenes_compra(id) ON DELETE RESTRICT,
     producto_id              UUID          NOT NULL REFERENCES productos(id) ON DELETE RESTRICT,
     cantidad_recibida        DECIMAL(12,2) NOT NULL,
-    lote_id                  UUID          REFERENCES lotes(id) ON DELETE SET NULL,
+    lote_id                  UUID          REFERENCES lotes(id) ON DELETE SET_NULL,
     observaciones            TEXT          NOT NULL DEFAULT '',
     created_at               TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at               TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Evaluaciones de desempeño de proveedores
+CREATE TABLE evaluaciones_proveedor (
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    proveedor_id            UUID          NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+    periodo_inicio          DATE          NOT NULL,
+    periodo_fin             DATE          NOT NULL,
+    pct_entrega_a_tiempo    DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    pct_cantidad_completa   DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    pct_calidad             DECIMAL(5,2)  NOT NULL DEFAULT 100,
+    total_ordenes           INTEGER       NOT NULL DEFAULT 0,
+    total_recibidas         INTEGER       NOT NULL DEFAULT 0,
+    puntaje_global          DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    notas                   TEXT          NOT NULL DEFAULT '',
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(proveedor_id, periodo_inicio, periodo_fin)
 );
 
 
@@ -924,10 +1049,61 @@ CREATE TABLE detalle_asientos (
     cuenta_contable_id  UUID          NOT NULL REFERENCES cuentas_contables(id) ON DELETE RESTRICT,
     debe                DECIMAL(12,2) NOT NULL DEFAULT 0,
     haber               DECIMAL(12,2) NOT NULL DEFAULT 0,
-    descripcion         VARCHAR(200)  NOT NULL DEFAULT '',
+    descripcion         VARCHAR(500)  NOT NULL DEFAULT '',
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_asientos_fecha_estado ON asientos_contables(fecha, estado);
+
+-- Períodos contables (mensual)
+CREATE TABLE periodos_contables (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    anio            INTEGER       NOT NULL,
+    mes             INTEGER       NOT NULL,
+    cerrado         BOOLEAN       NOT NULL DEFAULT FALSE,
+    cerrado_por_id  UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    cerrado_at      TIMESTAMPTZ,
+    notas           TEXT          NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(anio, mes)
+);
+
+-- Conciliaciones bancarias
+CREATE TABLE conciliaciones_bancarias (
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre_cuenta           VARCHAR(150)  NOT NULL,
+    periodo                 VARCHAR(7)    NOT NULL,
+    saldo_segun_banco       DECIMAL(14,2) NOT NULL,
+    saldo_segun_sistema     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    diferencia              DECIMAL(14,2) NOT NULL DEFAULT 0,
+    estado                  VARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE',
+    notas                   TEXT          NOT NULL DEFAULT '',
+    creado_por_id           UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conciliaciones_periodo_estado ON conciliaciones_bancarias(periodo, estado);
+
+-- Movimientos bancarios para conciliación
+CREATE TABLE movimientos_bancarios (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    conciliacion_id     UUID          NOT NULL REFERENCES conciliaciones_bancarias(id) ON DELETE CASCADE,
+    fecha               DATE          NOT NULL,
+    descripcion         VARCHAR(300)  NOT NULL,
+    tipo                VARCHAR(10)   NOT NULL DEFAULT 'INGRESO',
+    monto               DECIMAL(12,2) NOT NULL,
+    referencia          VARCHAR(100)  NOT NULL DEFAULT '',
+    cobro_id            UUID          REFERENCES cobros(id) ON DELETE SET_NULL,
+    pago_id             UUID          REFERENCES pagos(id) ON DELETE SET_NULL,
+    conciliado          BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_movimientos_bancarios_conciliado ON movimientos_bancarios(conciliado);
 
 
 -- ************************************************************
@@ -937,34 +1113,63 @@ CREATE TABLE detalle_asientos (
 CREATE TABLE transportistas (
     id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre                VARCHAR(200)  NOT NULL,
-    telefono              VARCHAR(20)   NOT NULL,
+    telefono              VARCHAR(20)   NOT NULL DEFAULT '',
     email                 VARCHAR(254)  NOT NULL DEFAULT '',
     tipo_vehiculo         VARCHAR(50)   NOT NULL DEFAULT '',
-    placa                 VARCHAR(10)   NOT NULL DEFAULT '',
+    placa                 VARCHAR(20)   NOT NULL DEFAULT '',
     limite_pedidos_diario INTEGER       NOT NULL DEFAULT 20,
     is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
+    token                 UUID          NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    last_lat              DECIMAL(10,8),
+    last_lng              DECIMAL(10,8),
+    last_location_at      TIMESTAMPTZ,
+    preferencia_zona      VARCHAR(200)  NOT NULL DEFAULT '',
+    tipo_transportista    VARCHAR(20)   NOT NULL DEFAULT 'propio',
+    app_nombre            VARCHAR(50)   NOT NULL DEFAULT '',
     created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE pedidos (
-    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    numero                  VARCHAR(20)   NOT NULL,
-    fecha                   DATE          NOT NULL,
-    venta_id                UUID          REFERENCES ventas(id) ON DELETE SET NULL,
-    cliente_id              UUID          NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
-    direccion_entrega       TEXT          NOT NULL,
-    latitud                 DECIMAL(10,7),
-    longitud                DECIMAL(10,7),
-    estado                  enum_estado_pedido NOT NULL DEFAULT 'pendiente',
-    transportista_id        UUID          REFERENCES transportistas(id) ON DELETE SET NULL,
-    fecha_estimada_entrega  DATE,
-    fecha_entrega_real      DATE,
-    notas                   TEXT          NOT NULL DEFAULT '',
-    prioridad               enum_prioridad_pedido NOT NULL DEFAULT 'normal',
-    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    numero                      VARCHAR(20)   NOT NULL,
+    codigo_seguimiento          VARCHAR(8)    NOT NULL UNIQUE,
+    fecha                       DATE          NOT NULL,
+    venta_id                    UUID          REFERENCES ventas(id) ON DELETE SET NULL,
+    cliente_id                  UUID          NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+    direccion_entrega           TEXT,
+    latitud                     DECIMAL(10,7),
+    longitud                    DECIMAL(10,7),
+    estado                      VARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE',
+    transportista_id            UUID          REFERENCES transportistas(id) ON DELETE SET NULL,
+    fecha_estimada_entrega      TIMESTAMPTZ,
+    fecha_entrega_real          TIMESTAMPTZ,
+    notas                       TEXT          NOT NULL DEFAULT '',
+    prioridad                   VARCHAR(20)   NOT NULL DEFAULT 'NORMAL',
+    nombre_destinatario         VARCHAR(200)  NOT NULL DEFAULT '',
+    telefono_destinatario       VARCHAR(20)   NOT NULL DEFAULT '',
+    turno_entrega               VARCHAR(10),
+    turno_express_rango         VARCHAR(50),
+    costo_delivery              DECIMAL(10,2) NOT NULL DEFAULT 0,
+    enlace_ubicacion            VARCHAR(500),
+    es_urgente                  BOOLEAN       NOT NULL DEFAULT FALSE,
+    fecha_pedido                DATE,
+    dedicatoria                 TEXT          NOT NULL DEFAULT '',
+    foto_entrega                VARCHAR(500),
+    observacion_conductor       TEXT          NOT NULL DEFAULT '',
+    fecha_confirmacion          TIMESTAMPTZ,
+    estado_produccion           VARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE',
+    produccion_iniciada_en      TIMESTAMPTZ,
+    produccion_completada_en    TIMESTAMPTZ,
+    creado_por_id               UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    is_active                   BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_pedidos_estado_fecha ON pedidos(estado, fecha);
+CREATE INDEX idx_pedidos_transportista_fecha ON pedidos(transportista_id, fecha);
+CREATE INDEX idx_pedidos_codigo_seguimiento ON pedidos(codigo_seguimiento);
 
 CREATE TABLE seguimiento_pedidos (
     id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -982,9 +1187,12 @@ CREATE TABLE evidencias_entrega (
     pedido_id       UUID          NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
     tipo            enum_tipo_evidencia NOT NULL,
     archivo         VARCHAR(500),
+    media_id        UUID          REFERENCES media_archivos(id) ON DELETE SET_NULL,
     codigo_otp      VARCHAR(6),
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_evidencias_media ON evidencias_entrega(media_id);
 
 
 -- ************************************************************
@@ -992,49 +1200,78 @@ CREATE TABLE evidencias_entrega (
 -- ************************************************************
 
 CREATE TABLE whatsapp_configuracion (
-    id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone_number_id   VARCHAR(50)   NOT NULL,
-    token_acceso      VARCHAR(500)  NOT NULL,
-    business_id       VARCHAR(50)   NOT NULL DEFAULT '',
-    numero_verificado VARCHAR(20)   NOT NULL DEFAULT '',
-    is_active         BOOLEAN       NOT NULL DEFAULT TRUE,
-    created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone_number_id     VARCHAR(50)   NOT NULL DEFAULT '',
+    waba_id             VARCHAR(50)   NOT NULL DEFAULT '',
+    access_token        TEXT          NOT NULL DEFAULT '',
+    webhook_verify_token VARCHAR(100) NOT NULL DEFAULT '',
+    activo              BOOLEAN       NOT NULL DEFAULT FALSE,
+    singleton_lock      INTEGER       NOT NULL DEFAULT 1,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(singleton_lock)
 );
 
 CREATE TABLE whatsapp_plantillas (
     id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    nombre              VARCHAR(100)  NOT NULL,
-    categoria           enum_categoria_plantilla_wa NOT NULL,
-    contenido_template  TEXT          NOT NULL,
-    variables_count     INTEGER       NOT NULL DEFAULT 0,
-    estado_meta         enum_estado_plantilla_meta NOT NULL DEFAULT 'en_revision',
+    nombre              VARCHAR(100)  NOT NULL UNIQUE,
+    categoria           VARCHAR(20)   NOT NULL DEFAULT 'TRANSACCIONAL',
+    idioma              VARCHAR(10)   NOT NULL DEFAULT 'es',
+    contenido           TEXT          NOT NULL,
+    estado_meta         VARCHAR(20)   NOT NULL DEFAULT 'EN_REVISION',
     is_active           BOOLEAN       NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE whatsapp_mensajes (
-    id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    plantilla_id          UUID          REFERENCES whatsapp_plantillas(id) ON DELETE SET NULL,
-    destinatario_telefono VARCHAR(20)   NOT NULL,
-    cliente_id            UUID          REFERENCES clientes(id) ON DELETE SET NULL,
-    contenido_enviado     TEXT          NOT NULL,
-    estado                enum_estado_mensaje_wa NOT NULL DEFAULT 'en_espera',
-    meta_message_id       VARCHAR(100)  NOT NULL DEFAULT '',
-    codigo_respuesta_api  VARCHAR(20)   NOT NULL DEFAULT '',
-    referencia_tipo       VARCHAR(20)   NOT NULL DEFAULT '',
-    referencia_id         UUID,
-    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    plantilla_id        UUID          REFERENCES whatsapp_plantillas(id) ON DELETE SET_NULL,
+    destinatario        VARCHAR(20)   NOT NULL,
+    nombre_destinatario VARCHAR(200)  NOT NULL DEFAULT '',
+    contenido           TEXT,
+    parametros          JSONB         NOT NULL DEFAULT '{}',
+    estado              VARCHAR(20)   NOT NULL DEFAULT 'EN_ESPERA',
+    wa_message_id       VARCHAR(100)  NOT NULL DEFAULT '',
+    referencia_tipo     VARCHAR(50)   NOT NULL DEFAULT '',
+    referencia_id       UUID,
+    error_detalle       TEXT          NOT NULL DEFAULT '',
+    enviado_at          TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE whatsapp_log (
     id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    mensaje_id      UUID          NOT NULL REFERENCES whatsapp_mensajes(id) ON DELETE CASCADE,
-    request_json    JSONB         NOT NULL,
-    response_json   JSONB,
-    codigo_http     INTEGER,
+    evento          VARCHAR(50)   NOT NULL,
+    payload         JSONB         NOT NULL DEFAULT '{}',
+    wa_message_id   VARCHAR(100)  NOT NULL DEFAULT '',
+    procesado       BOOLEAN       NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Campañas de WhatsApp
+CREATE TABLE whatsapp_campanas (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre              VARCHAR(200)  NOT NULL,
+    plantilla_id        UUID          REFERENCES whatsapp_plantillas(id) ON DELETE SET_NULL,
+    segmento            VARCHAR(100)  NOT NULL DEFAULT '',
+    estado              VARCHAR(20)   NOT NULL DEFAULT 'BORRADOR',
+    total_contactos     INTEGER       NOT NULL DEFAULT 0,
+    mensajes_encolados  INTEGER       NOT NULL DEFAULT 0,
+    programado_para     TIMESTAMPTZ,
+    creado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Automatizaciones de WhatsApp (e.g., confirmación de venta, recordatorio de pago)
+CREATE TABLE whatsapp_automatizaciones (
+    id                  VARCHAR(50)   PRIMARY KEY,
+    evento              VARCHAR(50)   NOT NULL UNIQUE,
+    plantilla_id        UUID          REFERENCES whatsapp_plantillas(id) ON DELETE SET_NULL,
+    activo              BOOLEAN       NOT NULL DEFAULT FALSE,
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 
@@ -1077,19 +1314,58 @@ CREATE INDEX idx_media_principal ON media_archivos(entidad_tipo, entidad_id, es_
 
 
 -- ************************************************************
+-- 13. REPORTES (3 tablas)
+-- ************************************************************
+
+-- Snapshots de KPIs (para gráficos históricos)
+CREATE TABLE snapshots_kpi (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    fecha           DATE          NOT NULL,
+    hora            TIME          NOT NULL,
+    datos           JSONB         NOT NULL,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_snapshots_kpi_fecha_hora ON snapshots_kpi(fecha, hora);
+
+-- Programaciones de reportes (automáticos)
+CREATE TABLE programaciones_reporte (
+    id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre              VARCHAR(200)  NOT NULL,
+    tipo_reporte        VARCHAR(30)   NOT NULL,
+    formato             VARCHAR(10)   NOT NULL DEFAULT 'excel',
+    frecuencia          VARCHAR(20)   NOT NULL,
+    hora_envio          TIME          NOT NULL,
+    dia_semana          INTEGER,
+    dia_mes             INTEGER,
+    emails              JSONB         NOT NULL DEFAULT '[]',
+    activo              BOOLEAN       NOT NULL DEFAULT TRUE,
+    creado_por_id       UUID          REFERENCES perfiles_usuario(id) ON DELETE SET_NULL,
+    ultima_ejecucion    TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+-- Configuración global de KPIs (Singleton)
+CREATE TABLE configuracion_kpi (
+    id                              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    ventas_diarias_umbral_verde     FLOAT         NOT NULL DEFAULT 10000.0,
+    ventas_diarias_umbral_amarillo  FLOAT         NOT NULL DEFAULT 5000.0,
+    stock_bajo_umbral               FLOAT         NOT NULL DEFAULT 10.0,
+    singleton_lock                  INTEGER       NOT NULL DEFAULT 1,
+    updated_at                      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(singleton_lock)
+);
+
+
+-- ************************************************************
 -- CONSTRAINTS ADICIONALES DE INTEGRIDAD
 -- Fuente: 16_REVISION_TECNICA.MD + validacion cruzada con docs
 -- ************************************************************
 
--- [H1] UNIQUE en notas crédito/débito (SUNAT rechaza serie+numero duplicados)
-ALTER TABLE notas_credito_debito
-    ADD CONSTRAINT uq_notas_tipo_serie_numero UNIQUE(tipo_nota, serie, numero);
-
--- [H2] UNIQUE en correlativos (evita duplicados por concurrencia)
-ALTER TABLE cotizaciones ADD CONSTRAINT uq_cotizaciones_numero UNIQUE(numero);
-ALTER TABLE ordenes_venta ADD CONSTRAINT uq_ordenes_venta_numero UNIQUE(numero);
-ALTER TABLE ventas ADD CONSTRAINT uq_ventas_numero UNIQUE(numero);
-ALTER TABLE ordenes_compra ADD CONSTRAINT uq_ordenes_compra_numero UNIQUE(numero);
+-- [H1] UNIQUE: ya definidos en CREATE TABLE
+--      notas_credito_debito, cotizaciones, ordenes_venta, ventas, ordenes_compra,
+--      comprobantes, series_comprobante, clientes, facturas_proveedor
 
 -- [H3] Cantidades positivas en tablas de detalle
 ALTER TABLE detalle_cotizaciones ADD CONSTRAINT chk_dc_cantidad CHECK (cantidad > 0);
@@ -1123,17 +1399,13 @@ ALTER TABLE detalle_ventas ADD CONSTRAINT chk_dv_precio CHECK (precio_unitario >
 ALTER TABLE detalle_comprobantes ADD CONSTRAINT chk_dcomp_precio CHECK (precio_unitario > 0);
 ALTER TABLE detalle_ordenes_compra ADD CONSTRAINT chk_doc_precio CHECK (precio_unitario > 0);
 
--- [H9] Singleton: configuracion solo puede tener 1 fila
-ALTER TABLE configuracion ADD COLUMN singleton BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE configuracion ADD CONSTRAINT uq_configuracion_singleton UNIQUE(singleton);
-ALTER TABLE configuracion ADD CONSTRAINT chk_singleton CHECK (singleton = TRUE);
+-- [H9] Singleton: configuracion, whatsapp_configuracion, configuracion_kpi
+--      Ya definidos en CREATE TABLE con UNIQUE(singleton_lock)
 
--- [H10] UNIQUE en pedidos y facturas proveedor
-ALTER TABLE pedidos ADD CONSTRAINT uq_pedidos_numero UNIQUE(numero);
-ALTER TABLE facturas_proveedor ADD CONSTRAINT uq_factura_prov UNIQUE(proveedor_id, numero_factura);
+-- [H10] UNIQUE: pedidos, facturas_proveedor
+--      Ya definidos en CREATE TABLE
 
 -- [H11] Documento único por cliente activo (permite re-registrar desactivados)
-DROP INDEX IF EXISTS idx_clientes_documento;
 CREATE UNIQUE INDEX idx_clientes_doc_unico
     ON clientes(tipo_documento, numero_documento)
     WHERE is_active = TRUE;

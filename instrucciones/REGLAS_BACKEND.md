@@ -1,8 +1,13 @@
 # JSOLUCIONES ERP — REGLAS DE BACKEND + BASE DE DATOS
+# Aplica tambien a: AMATISTA ERP (misma arquitectura, distinto proyecto)
 
 > Documento unico de reglas para backend y base de datos.
 > Alineado con el estado real del codigo (Feb 2026).
 > Reemplaza: 02_REGLAS_BACKEND_v2.md, 03_REGLAS_BASE_DATOS.md
+>
+> PATHS SEGUN PROYECTO:
+>   Jsoluciones → Amatista-be/ → Jsoluciones-be/
+>   (ver BACK-22 y seccion 12 para el comando correcto segun proyecto)
 
 ---
 
@@ -138,7 +143,8 @@ BACK-20: Todo ViewSet debe tener @extend_schema(tags=["..."]) a nivel de clase.
          Los tags son ASCII sin acentos (para compatibilidad con Orval).
 BACK-21: Todo @action custom debe tener @extend_schema con summary y request/response.
 BACK-22: Al terminar cambios en endpoints → regenerar OpenAPI schema:
-         python manage.py spectacular --color --file ../Jsoluciones-fe/openapi-schema.yaml
+         Proyecto Amatista:    python manage.py spectacular --color --file ../Amatista-fe/openapi-schema.yaml
+         Proyecto Jsoluciones: python manage.py spectacular --color --file ../Jsoluciones-fe/openapi-schema.yaml
 ```
 
 ### Generales
@@ -212,6 +218,13 @@ Para "anular": cambiar estado a 'anulado' y crear documento inverso (nota de cre
 4. Mostrar resultado al usuario
 5. NUNCA aplicar migrate automaticamente en produccion sin backup
 ```
+
+### Referencia schema real
+
+- [Amatista] Schema completo extraido de la DB real: `Amatista-docs/DB_SCHEMA_COMPLETO.md`
+  Contiene: 74 tablas, 33 enums, columnas exactas, constraints, indices, relaciones.
+  Actualizar cada vez que se apliquen migraciones nuevas.
+- SIEMPRE verificar en ese documento antes de "inventar" campos — si no esta ahi, no existe en la DB.
 
 ---
 
@@ -545,7 +558,17 @@ POST /exportar/               → Exportar (stub)
 Cuando se modifiquen endpoints:
 
 ```bash
-# En el directorio del backend
+# === PROYECTO AMATISTA ===
+# En el directorio del backend (Amatista-be/)
+python manage.py spectacular --color --file ../Amatista-fe/openapi-schema.yaml
+
+# Luego en el frontend
+cd ../Amatista-fe
+pnpm orval
+pnpm tsc --noEmit
+
+# === PROYECTO JSOLUCIONES ===
+# En el directorio del backend (Jsoluciones-be/)
 python manage.py spectacular --color --file ../Jsoluciones-fe/openapi-schema.yaml
 
 # Luego en el frontend
@@ -586,3 +609,4 @@ python manage.py spectacular --file schema.yaml  # Generar OpenAPI schema
 ---
 
 *Documento unico backend + DB. Feb 2026. Alineado con codigo real.*
+*Aplica a Jsoluciones-be/ y Amatista-be/ — adaptar rutas segun proyecto activo.*

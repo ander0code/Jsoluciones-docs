@@ -1,7 +1,10 @@
-# JSOLUCIONES ERP — REGLAS DE FRONTEND v3
+# JSOLUCIONES / AMATISTA ERP — REGLAS DE FRONTEND v3
 
 > Version 3. Alineada con el estado real del proyecto (Feb 2026).
 > Reemplaza v2. Elimina sobreingenieria, refleja stack actual, define patrones concretos.
+>
+> Aplica a AMBOS proyectos: Jsoluciones-fe/ y Amatista-fe/
+> Las diferencias entre proyectos estan marcadas con [JSol] y [Amatista].
 
 ---
 
@@ -27,9 +30,25 @@
 **Lo que NO se usa (NO agregar):**
 - Zustand (no hay necesidad de estado global mas alla de AuthContext)
 - Redux / MobX (misma razon)
-- Axios como cliente HTTP principal (Orval usa customFetch con fetch nativo)
+- [JSol]    Axios como cliente HTTP principal (Orval usa customFetch con fetch nativo)
+- [Amatista] Axios YA EXISTE en el proyecto (services/api.ts es legacy). NO usarlo para endpoints
+             nuevos — todo pasa por Orval hooks. El archivo services/api.ts existe pero NO debe
+             importarse en componentes nuevos (ver NO-01).
 - dayjs / moment (usar Intl.DateTimeFormat o flat helpers)
 - Cualquier libreria de componentes (MUI, Ant Design, Chakra) — Tailwind + Preline es suficiente
+
+**Diferencias de stack entre proyectos:**
+| Paquete            | Jsoluciones-fe | Amatista-fe |
+|--------------------|---------------|-------------|
+| axios              | No            | Si (legacy) |
+| react-hook-form    | Si (agregar)  | No instalado |
+| usehooks-ts        | No            | Si          |
+| html5-qrcode       | No            | Si          |
+| react-leaflet      | No            | Si          |
+| swiper             | No            | Si          |
+| simplebar-react    | No            | Si          |
+| src/services/      | No existe     | Existe (legacy, NO usar) |
+| src/routes/        | No existe     | Existe (Routes.tsx) |
 
 ---
 
@@ -306,9 +325,10 @@ src/
 
 ## 5. DESIGN SYSTEM — PALETA Y TIPOGRAFIA
 
-> Fuente: DESIGN_SYSTEM.md + themes.css
+> Fuente: themes.css de cada proyecto
+> CADA PROYECTO TIENE SU PROPIA PALETA — no mezclar.
 
-### Colores
+### [Jsoluciones] Colores
 
 | Token | Color | Hex | Uso |
 |-------|-------|-----|-----|
@@ -319,16 +339,30 @@ src/
 | `brand-border` | Gris Nube | `#E8E8E8` | Bordes de inputs, cards, divisores |
 | `brand-accent` | Gris Topo | `#9E9188` | Iconos secundarios, decorativos |
 
+### [Amatista] Colores
+
+| Token | Color | Hex | Uso |
+|-------|-------|-----|-----|
+| `primary` | Purpura Amatista | `#8E338A` | CTAs, botones, links activos |
+| `accent-orange` | Naranja Atardecer | `#F28E2B` | Degradado top, alertas |
+| `accent-pink` | Rosa Vibrante | `#D81B60` | Degradado mid, boton secundario |
+| `brand-dark` | Negro Suave | `#1A1A2E` | Titulos H1/H2, texto alto contraste |
+| `brand-body` | Gris Pizarra | `#555555` | Texto cuerpo, labels, descripciones |
+| `brand-surface` | Rosa Palido | `#FFF5F7` | Fondo general de pagina |
+| `brand-border` | Gris Suave | `#E0E0E0` | Bordes de inputs, cards, divisores |
+| `brand-accent` | Rosa Vibrante | `#D81B60` | Iconos secundarios, decorativos |
+
 ### Tipografia
 
-| Rol | Familia | Pesos |
-|-----|---------|-------|
-| Titulos (H1-H3) | Playfair Display | 600, 700 |
-| Cuerpo y UI | Inter | 400, 500, 600 |
+| Rol | Jsoluciones | Amatista |
+|-----|-------------|----------|
+| Titulos (H1-H3) | Playfair Display | Playfair Display |
+| Cuerpo y UI | Inter | Montserrat |
 
-### Variables CSS (ya en themes.css)
+### Variables CSS (ya en themes.css de cada proyecto)
 
 ```css
+/* Jsoluciones */
 --color-primary: #D65A42;
 --color-brand-dark: #1A1A1A;
 --color-brand-body: #555555;
@@ -337,17 +371,32 @@ src/
 --color-brand-accent: #9E9188;
 --font-heading: 'Playfair Display', Georgia, serif;
 --font-body: 'Inter', system-ui, sans-serif;
+
+/* Amatista */
+--color-primary: #8E338A;
+--color-accent-orange: #F28E2B;
+--color-accent-pink: #D81B60;
+--color-brand-dark: #1A1A2E;
+--color-brand-body: #555555;
+--color-brand-surface: #FFF5F7;
+--color-brand-border: #E0E0E0;
+--color-brand-accent: #D81B60;
+--font-heading: 'Playfair Display', Georgia, serif;
+--font-body: 'Montserrat', system-ui, sans-serif;
 ```
 
 ### Reglas de color
 
 ```
-COLOR-01: Botones primarios: bg-primary text-white. Hover: 10% mas oscuro (#BF4F3A).
+COLOR-01: Botones primarios: bg-primary text-white. Hover: 10% mas oscuro.
+          [JSol]    hover: #BF4F3A
+          [Amatista] hover: #7A2B77
 COLOR-02: Botones secundarios/outline: border-primary text-primary bg-transparent.
 COLOR-03: Botones destructivos (eliminar, anular): bg-red-600 text-white.
 COLOR-04: Links: text-primary. Hover: underline.
 COLOR-05: Focus de inputs: ring-primary/50 border-primary.
-COLOR-06: Fondo de pagina: bg-brand-surface (#F9F7F2) — NO gris/blanco puro.
+COLOR-06: Fondo de pagina: bg-brand-surface — NO gris/blanco puro.
+          [JSol]    #F9F7F2   [Amatista] #FFF5F7
 COLOR-07: Cards: bg-white con shadow-sm y border border-brand-border.
 COLOR-08: Texto principal: text-brand-dark. Texto secundario: text-brand-body.
 COLOR-09: Dark mode: ya configurado en themes.css con [data-theme=dark].
@@ -754,8 +803,21 @@ A11Y-06: Inputs de precio/cantidad usan inputMode="decimal" para movil.
 Cuando el backend agrega o modifica endpoints:
 
 ```bash
+# === PROYECTO AMATISTA ===
 # 1. Backend genera nuevo schema
-cd ../Jsoluciones-be
+cd Amatista-be/
+python manage.py spectacular --color --file ../Amatista-fe/openapi-schema.yaml
+
+# 2. Frontend regenera hooks y tipos
+cd ../Amatista-fe
+pnpm orval
+
+# 3. Verificar que compila
+pnpm tsc --noEmit
+
+# === PROYECTO JSOLUCIONES ===
+# 1. Backend genera nuevo schema
+cd Jsoluciones-be/
 python manage.py spectacular --color --file ../Jsoluciones-fe/openapi-schema.yaml
 
 # 2. Frontend regenera hooks y tipos
@@ -765,7 +827,7 @@ pnpm orval
 # 3. Verificar que compila
 pnpm tsc --noEmit
 
-# 4. Commit
+# 4. Commit (ambos proyectos)
 git add src/api/generated/ src/api/models/ openapi-schema.yaml
 git commit -m "regen: actualizar tipos y hooks desde OpenAPI"
 ```
@@ -797,8 +859,10 @@ Si los tipos generados no son correctos, el problema esta en el backend
 ## 14. LO QUE NO SE HACE (ANTI-PATRONES)
 
 ```
-NO-01: NO crear servicios api manuales (ya no usar src/services/api.ts ni authService.ts).
-       Todo pasa por Orval hooks.
+NO-01: NO crear servicios api manuales. Todo pasa por Orval hooks.
+       [JSol]    src/services/ no existe — no crear.
+       [Amatista] src/services/api.ts existe pero es LEGACY. No importar en codigo nuevo.
+                  No agregar funciones nuevas ahi.
 NO-02: NO duplicar constantes. Un solo lugar: src/config/constants.ts.
 NO-03: NO crear componentes wrapper para cosas que Tailwind resuelve.
 NO-04: NO instalar librerias de UI (MUI, Ant, etc.).
@@ -816,6 +880,7 @@ NO-10: NO inventar campos que el backend no retorna.
 
 Estos son problemas heredados del template que deben corregirse:
 
+### [Jsoluciones-fe]
 | # | Problema | Archivo | Solucion |
 |---|----------|---------|----------|
 | 1 | `<title>` dice "tailwick" | `index.html` | Cambiar a "JSoluciones ERP" |
@@ -829,6 +894,14 @@ Estos son problemas heredados del template que deben corregirse:
 | 9 | Topbar notificaciones hardcodeadas en ingles | topbar | Eliminar datos mock, dejar vacio o conectar |
 | 10 | METODO_PAGO_LABELS duplicado en 4+ archivos | varios | Centralizar en constants.ts |
 
+### [Amatista-fe]
+| # | Problema | Archivo | Solucion |
+|---|----------|---------|----------|
+| 1 | `services/api.ts` usa axios directamente (legacy) | `src/services/api.ts` | NO importar en codigo nuevo — usar Orval hooks |
+| 2 | `services/index.tsx` puede tener imports de api.ts | `src/services/index.tsx` | Verificar antes de cada PR |
+| 3 | `routes/Routes.tsx` define rutas — respetar estructura existente | `src/routes/Routes.tsx` | NO duplicar rutas con react-router en app/ |
+
 ---
 
 *v3 — Feb 2026. Alineada con estado real del proyecto. Sin sobreingenieria.*
+*Aplica a Jsoluciones-fe/ y Amatista-fe/ — ver marcas [JSol] y [Amatista] para diferencias.*

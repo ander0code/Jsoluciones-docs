@@ -2149,3 +2149,124 @@ CREATE TABLE whatsapp_log (
 CREATE INDEX IF NOT EXISTS idx_wa_log_evento     ON whatsapp_log(evento);
 CREATE INDEX IF NOT EXISTS idx_wa_log_procesado  ON whatsapp_log(procesado);
 CREATE INDEX IF NOT EXISTS idx_wa_log_wa_msg_id  ON whatsapp_log(wa_message_id);
+
+
+-- ============================================================
+-- ACTUALIZACIONES v5 — Template General JSoluciones
+-- Sincronizado con Amatista-BE — 2026-03-03
+-- Solo cambios GENERALES (no especificos de floreria)
+-- ============================================================
+
+
+-- ************************************************************
+-- [UPD-25] CAMPOS GENERALES FALTANTES EN PRODUCTOS
+-- Fuente: Amatista inventario/models.py — campos genericos
+-- precio_corporativo: precio especial para clientes corporativos
+-- factor_conversion: conversion entre unidades (ej: caja->unidad)
+-- ************************************************************
+
+ALTER TABLE productos
+    ADD COLUMN IF NOT EXISTS precio_corporativo  DECIMAL(12,4) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS factor_conversion    DECIMAL(10,4) NOT NULL DEFAULT 1.0;
+
+COMMENT ON COLUMN productos.precio_corporativo IS 'Precio especial para clientes corporativos (segmento=corporativo)';
+COMMENT ON COLUMN productos.factor_conversion IS 'Factor de conversion entre unidades (ej: 1 caja = 12 unidades -> 12.0)';
+
+
+-- ************************************************************
+-- [UPD-26] CAMPO fecha_entrada EN LOTES
+-- Fuente: Amatista inventario/models.py — Lote.fecha_entrada
+-- Fecha real de ingreso al almacen (puede diferir de created_at)
+-- ************************************************************
+
+ALTER TABLE lotes
+    ADD COLUMN IF NOT EXISTS fecha_entrada DATE NOT NULL DEFAULT CURRENT_DATE;
+
+COMMENT ON COLUMN lotes.fecha_entrada IS 'Fecha real de ingreso del lote al almacen';
+CREATE INDEX IF NOT EXISTS idx_lotes_fecha_entrada ON lotes(fecha_entrada);
+
+
+-- ************************************************************
+-- [UPD-27] CAMPOS APROBACION EN COTIZACIONES
+-- Fuente: Amatista ventas/models.py — Cotizacion.aprobada_por/aprobada_en
+-- Flujo de aprobacion de cotizaciones por supervisor/gerente
+-- ************************************************************
+
+ALTER TABLE cotizaciones
+    ADD COLUMN IF NOT EXISTS aprobada_por_id UUID REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS aprobada_en     TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_cotizaciones_aprobada_por ON cotizaciones(aprobada_por_id);
+COMMENT ON COLUMN cotizaciones.aprobada_por_id IS 'Usuario que aprobo la cotizacion (supervisor/gerente)';
+COMMENT ON COLUMN cotizaciones.aprobada_en IS 'Timestamp de aprobacion';
+
+
+-- ************************************************************
+-- [UPD-28] TABLA REGLAS DE DESCUENTO
+-- Fuente: Amatista inventario/models.py — ReglaDescuento
+-- Descuentos automaticos por volumen y/o segmento de cliente
+-- Aplica a cualquier POS/ERP con politicas de descuento
+-- ************************************************************
+
+CREATE TABLE IF NOT EXISTS reglas_descuento (
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre                  VARCHAR(200)  NOT NULL,
+    cantidad_minima         DECIMAL(12,2) NOT NULL DEFAULT 1,
+    descuento_porcentaje    DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    aplica_a_segmento       enum_segmento_cliente,
+    aplica_a_producto_id    UUID          REFERENCES productos(id) ON DELETE CASCADE,
+    is_active               BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reglas_desc_segmento ON reglas_descuento(aplica_a_segmento);
+CREATE INDEX IF NOT EXISTS idx_reglas_desc_producto ON reglas_descuento(aplica_a_producto_id);
+CREATE INDEX IF NOT EXISTS idx_reglas_desc_activa ON reglas_descuento(is_active) WHERE is_active = TRUE;
+
+COMMENT ON TABLE reglas_descuento IS 'Reglas de descuento automatico por volumen y/o segmento de cliente';
+
+
+-- ************************************************************
+-- [UPD-29] TABLA CAMPANAS DE MARKETING
+-- Fuente: Amatista ventas/models.py — Campana
+-- Campanas estacionales con descuento y fechas de vigencia
+-- Aplica a cualquier POS/ERP con campanas promocionales
+-- ************************************************************
+
+CREATE TABLE IF NOT EXISTS campanas (
+    id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre                  VARCHAR(200)  NOT NULL,
+    descripcion             TEXT          NOT NULL DEFAULT '',
+    fecha_inicio            DATE          NOT NULL,
+    fecha_fin               DATE          NOT NULL,
+    descuento_porcentaje    DECIMAL(5,2)  NOT NULL DEFAULT 0,
+    is_active               BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campanas_fechas ON campanas(fecha_inicio, fecha_fin);
+CREATE INDEX IF NOT EXISTS idx_campanas_activa ON campanas(is_active) WHERE is_active = TRUE;
+
+COMMENT ON TABLE campanas IS 'Campanas de marketing estacionales con descuento y vigencia';
+
+
+-- ************************************************************
+-- [UPD-30] TABLA CAMPANA_PRODUCTOS (M2M)
+-- Fuente: Amatista ventas/models.py — CampanaProducto
+-- Relacion explicita campana <-> producto
+-- ************************************************************
+
+CREATE TABLE IF NOT EXISTS campana_productos (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    campana_id      UUID          NOT NULL REFERENCES campanas(id) ON DELETE CASCADE,
+    producto_id     UUID          NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    UNIQUE(campana_id, producto_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_camp_prod_campana ON campana_productos(campana_id);
+CREATE INDEX IF NOT EXISTS idx_camp_prod_producto ON campana_productos(producto_id);
+
+COMMENT ON TABLE campana_productos IS 'Productos incluidos en una campana de marketing';

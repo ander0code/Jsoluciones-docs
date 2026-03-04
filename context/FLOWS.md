@@ -512,6 +512,245 @@
 
 ---
 
+# Flujos Genericos del Sistema (Independientes del Rol)
+
+> Estos flujos describen como se mueven los datos internamente, sin importar que rol los inicia.
+> Son la referencia para entender como conectar modulos nuevos (e-commerce, reservas, OT) con el nucleo del sistema.
+
+## FLUJO A — Venta directa en tienda (sin delivery)
+
+**Cuando aplica:** cualquier negocio con POS y el cliente retira en el local (floreria, mecanica, retail, hotel).
+
+```
+Cajero abre caja (abrir_caja)
+    ↓
+POST /ventas/pos/  [es_delivery=False]
+    ↓
+crear_venta_pos() [@transaction.atomic + select_for_update en Stock]
+    1. Valida cliente (si se proporciona; puede ser "Consumidor Final")
+    2. Valida almacen activo
+    3. Valida caja abierta
+    4. Por cada item:
+       - Valida producto activo
+       - Valida stock >= cantidad solicitada
+       - Calcula subtotal / IGV / total
+    5. Si metodo_pago=credito → valida limite de credito vs CxC pendientes
+    6. Crea Venta [estado=COMPLETADA, tipo_venta=VENTA_DIRECTA]
+    7. Crea DetalleVenta por cada item
+    8. Descuenta stock (MovimientoStock tipo MOV_SALIDA)
+    9. Genera asiento contable automatico
+   10. on_commit → Celery encola emitir_comprobante_por_venta(venta_id)
+    ↓
+Celery emite comprobante electronico via Nubefact OSE
+[PENDIENTE → ENVIADO → ACEPTADO por SUNAT]
+    ↓
+FIN — cliente se lleva el producto, comprobante disponible para descarga
+```
+
+**Campos involucrados en Venta:**
+- `tipo_venta = VENTA_DIRECTA`
+- `estado = COMPLETADA` (desde el inicio — no tiene estado intermedio)
+- `metodo_pago` — efectivo, tarjeta, QR, credito, mixto
+- `comprobante_id` — se llena en diferido por Celery
+
+**Campos involucrados en DetalleVenta:**
+- `producto`, `cantidad`, `precio_unitario`, `descuento_porcentaje`
+- `subtotal`, `igv`, `total`
+- `lote` (FK opcional — para trazabilidad)
+- **NO tiene campos de personalizacion, notas ni texto libre** — eso va en el Pedido
+
+---
+
+## FLUJO B — Venta con delivery
+
+**Cuando aplica:** floreria (entrega de arreglos), retail online, cualquier negocio que despacha a domicilio.
+
+```
+Vendedor/Cajero registra venta + datos de entrega
+    ↓
+POST /ventas/pos/  [es_delivery=True, datos_pedido={...}]
+    ↓
+crear_venta_con_pedido_pos() [@transaction.atomic]
+    ├── crear_venta_pos()   [mismo flujo que Flujo A]
+    └── crear_pedido()      [distribucion/services.py]
+          1. Genera numero "PED-XXXXX" y codigo_seguimiento (8 chars UUID)
+          2. Vincula venta_id al pedido
+          3. Valida transportista si se asigna en el momento
+          4. Crea Pedido [estado=PENDIENTE]
+          5. Crea primer SeguimientoPedido ("Pedido creado")
+    ↓
+[Si el negocio tiene produccion/armado]
+Estado produccion: PENDIENTE → ARMANDO → LISTO
+    ↓
+Supervisor Logistica asigna transportista
+Pedido [estado=EN_RUTA]
+SeguimientoPedido registrado
+    ↓
+Conductor confirma entrega (foto + firma + OTP)
+Pedido [estado=ENTREGADO]
+fecha_entrega_real registrada
+    ↓
+[WhatsApp/email al cliente — PENDIENTE de implementar]
+```
+
+**Conexion Venta → Pedido:**
+```python
+# En distribucion/models.py
+Pedido.venta = ForeignKey("ventas.Venta", null=True, blank=True, on_delete=SET_NULL)
+# La relacion inversa: venta.pedidos.all()
+# Es opcional: una Venta puede no tener Pedido (retiro en tienda)
+#              un Pedido puede no tener Venta (creado manualmente)
+```
+
+**Campos relevantes en Pedido:**
+- `codigo_seguimiento` — 8 chars, para el portal publico sin login
+- `nombre_destinatario`, `telefono_destinatario` — puede diferir del cliente que pago
+- `turno_entrega` — manana | tarde (choices generico)
+- `dedicatoria`, `notas` — texto libre (disponible para cualquier negocio)
+- `es_urgente` — flag booleano
+- `estado_produccion` — pendiente | armando | listo (Kanban de armado/preparacion)
+- `foto_entrega`, `observacion_conductor` — evidencia de entrega
+
+**Estados del Pedido:**
+```
+PENDIENTE → CONFIRMADO → DESPACHADO → EN_RUTA → ENTREGADO
+                                            ↘ CANCELADO
+```
+
+**Estados de Produccion (Kanban interno):**
+```
+PENDIENTE → ARMANDO → LISTO
+```
+Este Kanban es generico: sirve para armar arreglos florales, preparar pedidos de cocina,
+empacar productos, o cualquier proceso previo al despacho.
+
+---
+
+## FLUJO C — Venta desde Orden de Venta (B2B / Empresas)
+
+**Cuando aplica:** clientes corporativos que solicitan cotizacion antes de comprar.
+
+```
+Vendedor crea Cotizacion
+    ↓
+Cliente aprueba → "Convertir a Orden de Venta"
+Cotizacion [estado=ACEPTADA]
+OrdenVenta creada [estado=PENDIENTE]
+    ↓
+Cajero/Vendedor convierte OV a Venta
+POST /ventas/desde-orden/{orden_id}/
+    ↓
+[Mismo flujo que Flujo A o B segun si hay delivery]
+OrdenVenta [estado=FACTURADA]
+```
+
+**Relacion OrdenVenta → Venta:**
+```python
+# En ventas/models.py
+Venta.orden_origen = ForeignKey("OrdenVenta", null=True, blank=True)
+```
+
+---
+
+## FLUJO D — E-commerce (a implementar)
+
+**Cuando aplica:** cualquier negocio con tienda online.
+
+> **Estado actual:** este flujo NO existe en el sistema. Los modelos marcados con [FALTA] hay que crearlos.
+> El 80% del backend ya existe — solo falta la capa de entrada publica.
+
+```
+Cliente web agrega productos al carrito
+    ↓
+POST /api/publico/carrito/agregar/  [FALTA]
+    → Crea/actualiza CarritoWeb [FALTA]
+    → Reserva stock temporalmente (TTL 15-30 min en Redis)  [FALTA]
+    ↓
+Cliente confirma pedido → checkout
+POST /api/publico/checkout/  [FALTA]
+    ↓
+Pasarela de pago (Culqi / Niubiz / Stripe)  [FALTA]
+    → Pago exitoso → webhook confirma
+    ↓
+El sistema crea:
+    Venta [tipo_venta="ecommerce"]   ← campo ya existe en el modelo, solo falta usarlo
+    DetalleVenta por cada item       ← mismo modelo existente
+    Stock descontado via registrar_salida()  ← codigo existente
+    ↓
+Si el negocio tiene delivery:
+    Pedido creado en distribucion    ← mismo modelo existente
+    Conductor asignado y entrega     ← mismo flujo que Flujo B
+    ↓
+Si NO tiene delivery (retiro en tienda):
+    Cliente recibe notificacion "Tu pedido esta listo para retirar"
+    ↓
+Celery emite comprobante electronico  ← mismo codigo existente
+```
+
+**Que existe hoy vs que falta:**
+
+| Componente | Existe | Falta |
+|------------|--------|-------|
+| Catalogo de productos | SI — `apps/inventario/` | Endpoint publico sin JWT |
+| Cargar fotos del producto | SI — `apps/media/` | Asociacion al catalogo web |
+| Stock y descuento | SI — `registrar_salida()` | Reserva temporal con TTL |
+| Crear Venta | SI — `crear_venta_pos()` | Adaptacion para `tipo_venta=ecommerce` |
+| Distribucion/Delivery | SI — `distribucion/` | Solo conectar con el pedido web |
+| Facturacion SUNAT | SI — `facturacion/` | Nada — funciona igual |
+| Finanzas / CxC | SI — `finanzas/` | Nada — funciona igual |
+| Carrito con TTL | NO | Crear `CarritoWeb` + reserva en Redis |
+| Pasarela de pago | NO | Integrar Culqi o similar |
+| Endpoints publicos | NO | `urls_publicas.py` en inventario |
+| Panel ERP para pedidos web | NO | Vista que filtre por `tipo_venta=ecommerce` |
+| Perfil cliente web | NO | Registro/login separado del ERP |
+| Cupones | NO | Modelo `Cupon` + validacion en checkout |
+
+**Relacion con modulos existentes:**
+- `PedidoEcommerce.confirmar()` llama a `crear_venta_pos()` con `tipo_venta="ecommerce"`
+- El `Cobro` del pago digital se registra en `finanzas.Cobro` igual que un pago normal
+- El despacho del pedido usa `distribucion.crear_pedido()` igual que el Flujo B
+
+---
+
+## Relacion entre Inventario y E-commerce
+
+La vista de inventario del ERP (donde el admin carga productos) **es el mismo catalogo** que consume el e-commerce. No hay un catalogo separado.
+
+**Lo que ya tiene el modelo Producto que sirve al e-commerce:**
+- `nombre`, `descripcion` — titulo y descripcion corta
+- `precio` — precio de venta
+- `sku` — codigo del producto
+- `categoria` — para filtros y navegacion
+- `is_active` — para publicar/despublicar
+- `imagenes` — via `MediaArchivo` (relacion polimorfica existente)
+
+**Lo que hay que agregar al modelo Producto para e-commerce:**
+- `descripcion_larga` — texto largo con formato (hoy solo hay `descripcion` corta)
+- `slug` — URL amigable (`/productos/ramo-primavera` en vez de UUID)
+- `destacado` — flag para mostrar en portada del e-commerce
+- `orden_display` — orden de aparicion en el catalogo
+
+Estos 4 campos se agregan al modelo existente sin romper nada.
+
+---
+
+## La Personalizacion de Pedidos: que es generico vs que es especifico del negocio
+
+**Generico (ya en el template):**
+- `Pedido.notas` — campo de texto libre para cualquier instruccion
+- `Pedido.dedicatoria` — mensaje para el destinatario (util para floreria, regalos, etc.)
+- `Pedido.estado_produccion` — Kanban generico: pendiente → armando → listo
+
+**Especifico de floreria (en Amatista, NO en el template):**
+- `DetalleVenta.notas_arreglista` — instrucciones por producto, no por pedido
+- `AjustePersonalizacion` — cambiar insumos de la receta base por pedido
+- `RecetaProducto` + `DetalleReceta` — BOM: que flores componen cada arreglo
+- `estado_produccion` por item (no solo por pedido)
+
+**Conclusion:** el template base tiene suficiente generalizacion para delivery con notas y dedicatoria. La personalizacion granular por item de pedido es el modulo BOM/Produccion que se activa solo para negocios que lo necesitan (floreria, restaurante, manufactura).
+
+---
+
 # Flujos Comunes a Todos los Roles
 
 ### Login y autenticación

@@ -20,7 +20,8 @@ Jsoluciones-docs/
 │   ├── DATABASE.md              <- Reglas de BD, enums, choices, convenciones SQL
 │   ├── DEVOPS.md                <- Redis, Celery, Channels, Docker, produccion
 │   ├── FLOWS.md                 <- Flujos paso a paso por rol (10 roles, tabla de accesos)
-│   └── SYNC_LOG.md              <- Mejoras ya aplicadas al template (FE + BE)
+│   ├── SYNC_LOG.md              <- Mejoras ya aplicadas al template (FE + BE)
+│   └── ROADMAP.md               <- Estrategia multi-negocio, modulos pendientes, plan de etapas
 │
 └── rules/                       <- COMO SE TRABAJA
     ├── AGENT.md                 <- Reglas del agente: que hacer/no hacer, protocolo
@@ -41,6 +42,7 @@ Jsoluciones-docs/
 | Como funciona Redis, Celery, WebSockets, Docker | `context/DEVOPS.md` |
 | Que puede hacer cada rol, flujos paso a paso | `context/FLOWS.md` |
 | Que mejoras ya se aplicaron al template base | `context/SYNC_LOG.md` |
+| Que le falta al template, modulos futuros, como hacer fork | `context/ROADMAP.md` |
 | Reglas del agente, que puedo/no puedo hacer | `rules/AGENT.md` |
 | Patrones Django, como hacer un endpoint | `rules/BACKEND.md` |
 | Patrones React, como hacer una pagina | `rules/FRONTEND.md` |
